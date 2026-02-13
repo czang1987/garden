@@ -1,29 +1,42 @@
 {
-  "plants": [
+  "categories": [
     {
-      "name": "hydrangea",
-      "icon": "/assets/plants/hydrangea/icon.png",
-      "baseHeight":95,
-      "footprint": [1, 2]
-      
+      "id": "rose",
+      "name": "玫瑰",
+      "icon": "/assets/categories/rose.png",
+      "variants": [
+        {
+          "id": "rose_knockout_red",
+          "name": "Knock Out（红）",
+          "icon": "/assets/plants/rose_knockout_red/icon.png",
+          "baseHeight": 85,
+          "footprint": [1, 1],
+          "tags": ["红", "耐热", "易养"]
+        },
+        {
+          "id": "rose_iceberg_white",
+          "name": "Iceberg（白）",
+          "icon": "/assets/plants/rose_iceberg_white/icon.png",
+          "baseHeight": 80,
+          "footprint": [1, 1],
+          "tags": ["白", "开花多"]
+        }
+      ]
     },
     {
-      "name": "rose",
-      "icon": "/assets/plants/rose/icon.png",
-      "baseHeight":80,
-      "footprint": [1, 1]
-    },
-    {
-      "name": "tulip",
-      "icon": "/assets/plants/tulip/icon.png",
-      "baseHeight":60,
-      "footprint": [1, 1]
-    },
-     {
-      "name": "lavender",
-      "icon": "/assets/plants/lavender/icon.png",
-      "baseHeight":80,
-      "footprint": [1, 1]
+      "id": "hydrangea",
+      "name": "绣球",
+      "icon": "/assets/categories/hydrangea.png",
+      "variants": [
+        {
+          "id": "hydrangea_blue_bush",
+          "name": "大花绣球（蓝）",
+          "icon": "/assets/plants/hydrangea_blue_bush/icon.png",
+          "baseHeight": 95,
+          "footprint": [1, 2],
+          "tags": ["蓝", "半阴"]
+        }
+      ]
     }
   ]
 }
