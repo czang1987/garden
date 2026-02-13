@@ -37,6 +37,37 @@
           "tags": ["蓝", "半阴"]
         }
       ]
+    },
+    {
+      "id": "tulip",
+      "name": "郁金香",
+      "icon": "/assets/categories/tulip.png",
+      "variants": [
+        {
+          "id": "tulip_red",
+          "name": "红郁金香",
+          "icon": "/assets/plants/tulip_red/icon.png",
+          "baseHeight": 60,
+          "footprint": [1, 1],
+          "tags": ["红", "春季"]
+        }
+      ]
+    },
+    {
+      "id": "lavender",
+      "name": "薰衣草",
+      "icon": "/assets/categories/lavender.png",
+      "variants": [
+        {
+          "id": "lavender_english",
+          "name": "英格兰薰衣草",
+          "icon": "/assets/plants/lavender_english/icon.png",
+          "baseHeight": 80,
+          "footprint": [1, 1],
+          "tags": ["紫", "香气"]
+        }
+      ]
     }
+    
   ]
 }
