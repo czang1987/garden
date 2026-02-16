@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState,useMemo } from "react";
 import * as PIXI from "pixi.js";
-import type { PlantMeta } from "../types/plants";
+import type { PlantCatalogData, PlantCategory, PlantVariant } from "../type/plants";
 
 /** 你项目里的 GardenState 只要对齐这些字段即可 */
 export type Season = "spring" | "summer" | "autumn" | "winter";
@@ -12,6 +12,8 @@ export type GardenState = {
   cells: Cell[];
 };
 
+
+
 const textureCache: Record<string, PIXI.Texture> = {};
 
 /** 你的资源路径规则 */
@@ -21,10 +23,10 @@ function plantSeasonPath(plant: string, season: Season) {
 function plantIconPath(plant: string) {
   return `/assets/plants/${plant}/icon.png`;
 }
-function randFloat(min, max) {
+function randFloat(min: number, max: number) {
   return Math.random() * (max - min) + min;
 }
-function seededRandom(seed) {
+function seededRandom(seed: number) {
   const x = Math.sin(seed) * 10000;
   return Math.abs(x - Math.floor(x));
 }
@@ -78,22 +80,21 @@ export function FrontView({ garden }: { garden: GardenState }) {
   const sceneRef = useRef<PIXI.Container | null>(null);
 
   const [ready, setReady] = useState(false);
-  
-  const [plantMap, setPlantMap] = useState<Map<string, PlantMeta>>(new Map());
-  console.log("plantMap size =", plantMap.size);
+  const [variantMap, setVariantMap] = useState<Map<string, PlantVariant>>(new Map());
 
-useEffect(() => {
-  fetch("/assets/plants/index.json")
-    .then((res) => res.json())
-    .then((data) => {
-      const map = new Map<string, PlantMeta>();
-      data.plants.forEach((p: PlantMeta) => {
-        map.set(p.name, p);
+  useEffect(() => {
+    fetch("/assets/plants/index.json")
+      .then((r) => r.json())
+      .then((data: PlantCatalogData) => {
+        const map = new Map<string, PlantVariant>();
+        for (const cat of data.categories ?? []) {
+          for (const v of cat.variants ?? []) {
+            map.set(v.id, v);
+          }
+        }
+        setVariantMap(map);
       });
-      setPlantMap(map);
-    });
-}, []);
-
+  }, []);
 
   /** init Pixi once */
   useEffect(() => {
@@ -138,16 +139,18 @@ useEffect(() => {
 
   /** re-render when garden changes */
   useEffect(() => {
+    console.log("line 142 is working")
     if (!ready) return;
+    console.log("line 144 is working")
     const scene = sceneRef.current;
     if (!scene) return;
-    if (plantMap.size === 0) return;
-
+    console.log("line 147 is working")
+    if (variantMap.size === 0) return;
+    console.log("line 149 is working")
     // 注意：renderGarden 是 async，但我们不阻塞 UI
-    void renderGarden(scene, garden,plantMap);
-  }, [ready, garden,plantMap]);
-
-  //return <div ref={mountRef} />;
+    void renderGarden(scene, garden,variantMap);
+  }, [ready, garden,variantMap]);
+  
   return (
   <div>
     {/* 导出按钮 */}
@@ -183,7 +186,7 @@ function downloadContainerPNG(
 }
 
 /** 正面视角渲染（不画菱形） */
-async function renderGarden(scene: PIXI.Container, garden: GardenState, plantMap: Map<string, PlantMeta>) {
+async function renderGarden(scene: PIXI.Container, garden: GardenState, variantMap: Map<string, PlantVariant>) {
   scene.removeChildren();
 
   // ===== 你可以调的布局参数（决定“正面”构图）=====
@@ -195,33 +198,33 @@ async function renderGarden(scene: PIXI.Container, garden: GardenState, plantMap
   const ICON_MAX_H = 110; // 植物最大高
   const DEPTH_K = 0.12;   // 前后放大系数（row 越大越靠前）
 
- 
+  
  
   
   // ===== 画 empty 的土壤块（brown）=====
-const SOIL_W = 90;
-const SOIL_H = 30;
-const SOIL_COLOR = 0x9b6a3d; // brown
+  const SOIL_W = 90;
+  const SOIL_H = 30;
+  const SOIL_COLOR = 0x9b6a3d; // brown
 
-for (const cell of garden.cells) {
-//  if (cell.plant !== null ||cell.plant=='empty') continue;
+  for (const cell of garden.cells) {
+  //  if (cell.plant !== null ||cell.plant=='empty') continue;
 
-  const soil = new PIXI.Graphics();
+    const soil = new PIXI.Graphics();
 
-  // 正面坐标（和植物用同一套）
-  const x = BASE_X + cell.col * COL_GAP;
-  const y = BASE_Y + cell.row * ROW_GAP;
+    // 正面坐标（和植物用同一套）
+    const x = BASE_X + cell.col * COL_GAP;
+    const y = BASE_Y + cell.row * ROW_GAP;
 
-  // 土块是一个扁平的矩形
-  soil
-    .rect(x , y , COL_GAP, ROW_GAP)
-    .fill({ color: SOIL_COLOR });
+    // 土块是一个扁平的矩形
+    soil
+      .rect(x , y , COL_GAP, ROW_GAP)
+      .fill({ color: SOIL_COLOR });
 
-  // 越靠前越“压住”后排
-  soil.zIndex = cell.row * 100;
+    // 越靠前越“压住”后排
+    soil.zIndex = cell.row * 100;
 
-  scene.addChild(soil);
-}
+    scene.addChild(soil);
+  }
 
 
   // 并行预加载纹理（同一种植物会出现多次）
@@ -233,7 +236,7 @@ for (const cell of garden.cells) {
   for (const cell of plantCells) {
     const plant = cell.plant!;
     if(plant=='empty'){continue;}
-    
+    console.log("found plant",cell.plant)
     const tex = await loadPlantTexture(plant, garden.season);
 
     const sprite = new PIXI.Sprite(tex);
@@ -249,7 +252,7 @@ for (const cell of garden.cells) {
     sprite.position.set(x, y);
 
     // 先 fit 到框里（保持比例）
-    const meta = plantMap.get(plant);
+    const meta = variantMap.get(plant);
     const baseHeight = meta?.baseHeight ?? 70;
 
     fitSpriteByHeight(sprite, baseHeight);

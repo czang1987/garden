@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import * as PIXI from "pixi.js";
-import { resizeGarden } from "../store/garden";
+import { resizeGarden,GardenState,printGarden } from "../store/garden";
+import PlantCatalog from "../components/PlantCatalog";
+import type { PlantCatalogData, PlantCategory, PlantVariant } from "../type/plants";
+
+
 
 const GRID_SIZE = 5;
 const CELL_SIZE = 100;
 
 type Cell = { plant: string | null };
-type PlantMeta = { name: string; icon: string };
+
 
 export default function TopView({
   garden,
@@ -24,7 +28,23 @@ export default function TopView({
   type RC = { r: number; c: number };
   //const [selectedCells, setSelectedCells] = useState<RC[]>([]);  
   // ✅ 动态植物列表（来自配置文件）
-  const [plants, setPlants] = useState<PlantMeta[]>([]);
+  
+  const [categories, setCategories] = useState<PlantCategory[]>([]);
+  
+
+  useEffect(() => {
+    fetch("/assets/plants/index.json")
+      .then(r => r.json())
+      .then((data: PlantCatalogData) => setCategories(data.categories ?? []));
+  }, []);
+  const allVariants = useMemo(() => {
+    const out: PlantVariant[] = [];
+      for (const cat of categories) {
+        out.push(...cat.variants);
+      }
+      return out;
+    }, [categories]);
+
  // garden 外部变化时同步输入框
   useEffect(() => {
     
@@ -53,34 +73,57 @@ export default function TopView({
     return cells;
   }
 
-  function inBounds(garden: GardenState, rc: RC) {
-    return rc.r >= 0 && rc.r < garden.rows && rc.c >= 0 && rc.c < garden.cols;
+  function inBounds(garden: GardenState, rr:number,cc:number) {
+    return rr >= 0 && rr < garden.rows && cc >= 0 && cc < garden.cols;
   }
 
   // 如果你有 lock[][]，用这个；如果没有，就用 garden.cells 判断是否已占用
-  function isOccupied( rc: RC) {
-    return lock[rc.r][rc.c];
-   
+  function cellOccupied(r: number, c: number) {
+    return lock[r][c];
+  //  return false;
   }
 
-  function canPlacePlantAtSelected(plantName: string) {
+  function canSelectVariant(v: PlantVariant) {
     if (!selectedCell) return false;
 
-    const meta = plants.find(p => p.name === plantName);
-    const fp: [number, number] = (meta?.footprint ?? [1, 1]) as [number, number];
+    const fp = (v.footprint ?? [1, 1]) as [number, number];
+    const [h, w] = fp;
+    console.log(h,w);
 
-    const targets = footprintCells({ r: selectedCell.r, c: selectedCell.c }, fp);
-
-    // ① 边界检查：任何一个 target 越界就不允许（边缘格会在这里被禁用）
-    if (!targets.every(rc => inBounds(garden, rc))) return false;
-
-    // ② 占用检查：任何一个 target 已占用就不允许
-      if (!targets.every(rc => !isOccupied(rc))) return false;
-    //if (!targets.every(rc => !isOccupied(garden, rc))) return false;
-
+    // 以 selectedCell 作为 anchor（左上角）
+    for (let dr = 0; dr < h; dr++) {
+      for (let dc = 0; dc < w; dc++) {
+        const rr = selectedCell.r + dr;
+        const cc = selectedCell.c + dc;
+        console.log(rr,cc,garden.rows,garden.cols)
+        if (!inBounds(garden,rr, cc)){
+          console.log("not inBounds");
+          return false; 
+        }        // ✅ 边缘越界禁用
+        if (cellOccupied(rr, cc)) return false;     // ✅ 被占用禁用
+      }
+    }
     return true;
+}
+
+function disabledReason(v: PlantVariant) {
+  if (!selectedCell) return "请先选中一个格子";
+
+  const fp = (v.footprint ?? [1, 1]) as [number, number];
+  const [h, w] = fp;
+
+  for (let dr = 0; dr < h; dr++) {
+    for (let dc = 0; dc < w; dc++) {
+      const rr = selectedCell.r + dr;
+      const cc = selectedCell.c + dc;
+
+      if (!inBounds(garden,rr, cc)) return "边缘位置放不下";
+      if (cellOccupied(rr, cc)) return "目标格已被占用";
+    }
   }
-  
+  return null;
+}
+
 
   
   useEffect(() => {
@@ -102,15 +145,7 @@ export default function TopView({
 
   const [selectedCell, setSelectedCell] = useState<{ r: number; c: number } | null>(null);
 
-  /* ============ load plants from config ============ */
-  useEffect(() => {
-    (async () => {
-      const res = await fetch("/assets/plants/index.json");
-      const data = (await res.json()) as { plants: PlantMeta[] };
-      setPlants(data.plants ?? []);
-    })();
-  }, []);
-
+ 
   /* ================= Pixi init ================= */
   useEffect(() => {
     let alive = true;
@@ -223,46 +258,56 @@ export default function TopView({
     }
   }
 };
-
+function getCell(next: GardenState, r: number, c: number) {
+  return next.cells.find((x) => x.row === r && x.col === c) ?? null;
+}
 
   /* ================= select plant ================= */
-const choosePlant = (plant: string | null) => {
+const choosePlant = (plantId: string | null) => {
   if (!selectedCell) return;
+  if(plantId==null) return;
 
   const next = structuredClone(garden); // ✅ 先复制
 
-  const target = next.cells.find(
-    (cell) => cell.row === selectedCell.r && cell.col === selectedCell.c
-  );
+  const target = getCell(next,selectedCell.r,selectedCell.c);
+  if(target==null) return;
 
-  if(target.plant==plant){//same plant, do nothing
+  if(target.plant==plantId){//same plant, do nothing
     setSelectedCell(null);
     return;
   }
   
+  
 
   
   if(target.plant!='empty'){//remove old plant
-    const meta = plants.find(p => p.name === plant);
-    const fp: [number, number] = (meta?.footprint ?? [1, 1]) as [number, number];
+    const variant = allVariants.find((v) => v.id === plantId);
+
+    const fp: [number, number] = (variant?.footprint ?? [1, 1]) as [number, number];
     const cells = footprintCells({ r: selectedCell.r, c: selectedCell.c }, fp);
     for(const rc of cells){
-      const cell = next.cells.find(x => x.row === rc.r && x.col === rc.c);  
+      const cell = getCell(next,rc.r,rc.c); 
+      if(cell==null) continue;
       lock[rc.r][rc.c]=false;
       cell.plant='empty';
     }
   } 
 
-  if( plant!=='empty'){//place new plant
-    const meta = plants.find(p => p.name === plant);
-    const fp: [number, number] = (meta?.footprint ?? [1, 1]) as [number, number];
+  if( plantId!=='empty'){//place new plant
+    const variant = allVariants.find((v) => v.id === plantId);
+    
+    const fp: [number, number] = (variant?.footprint ?? [1, 1]) as [number, number];
     const cells = footprintCells({ r: selectedCell.r, c: selectedCell.c }, fp);
     for(const rc of cells){
-      const cell = next.cells.find(x => x.row === rc.r && x.col === rc.c);  
+      const cell = getCell(next,rc.r,rc.c);
+      if(cell==null) continue;
       lock[rc.r][rc.c]=true;
       cell.plant="empty";//temporarily set to empty to avoid blocking itself
     }
-    target.plant=plant;
+    
+    
+    target.plant=plantId;
+    printGarden(next);
   } 
 
 
@@ -324,37 +369,20 @@ return (
           清空（empty）
         </button>
 
-        {plants.length === 0 ? (
+        {allVariants.length === 0 ? (
           <div style={{ fontSize: 12, color: "#999" }}>
             正在加载 plants/index.json...
           </div>
         ) : (
-          plants.map((p) => (
-            <button
-              key={p.name}
-              onClick={() => choosePlant(p.name)}
-              disabled={!canPlacePlantAtSelected(p.name)}
-              style={{
-                opacity: canPlacePlantAtSelected(p.name) ? 1 : 0.4,
-                cursor: canPlacePlantAtSelected(p.name) ? "pointer" : "not-allowed",
-                display: "flex",
-                alignItems: "center",
-                width: "100%",
-                marginBottom: 8,
-                padding: "6px 8px"
-               
-              }}
-            >
-              <img
-                src={p.icon}
-                width={32}
-                height={32}
-                style={{ marginRight: 8, objectFit: "contain" }}
-              />
-              {p.name}
-            </button>
-          ))
-        )}
+          <PlantCatalog
+            categories={categories}
+            hasSelection={!!selectedCell}
+            onClear={() => choosePlant(null)}
+            canSelectVariant={canSelectVariant}
+            disabledReason={disabledReason}
+            onSelectVariant={(v) => choosePlant(v.id)} // ✅ 用 variant.id
+          />
+          )}
       </div>
     </div>
   </>
