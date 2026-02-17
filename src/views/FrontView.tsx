@@ -139,16 +139,19 @@ export function FrontView({ garden }: { garden: GardenState }) {
 
   /** re-render when garden changes */
   useEffect(() => {
-    console.log("line 142 is working")
+    
     if (!ready) return;
-    console.log("line 144 is working")
+    
     const scene = sceneRef.current;
     if (!scene) return;
-    console.log("line 147 is working")
+    
     if (variantMap.size === 0) return;
-    console.log("line 149 is working")
+    
+    const app = appRef.current;
+    if (!app) return;
+
     // 注意：renderGarden 是 async，但我们不阻塞 UI
-    void renderGarden(scene, garden,variantMap);
+    void renderGarden(app,scene, garden,variantMap);
   }, [ready, garden,variantMap]);
   
   return (
@@ -186,7 +189,7 @@ function downloadContainerPNG(
 }
 
 /** 正面视角渲染（不画菱形） */
-async function renderGarden(scene: PIXI.Container, garden: GardenState, variantMap: Map<string, PlantVariant>) {
+async function renderGarden(app: PIXI.Application,scene: PIXI.Container, garden: GardenState, variantMap: Map<string, PlantVariant>) {
   scene.removeChildren();
 
   // ===== 你可以调的布局参数（决定“正面”构图）=====
@@ -205,27 +208,45 @@ async function renderGarden(scene: PIXI.Container, garden: GardenState, variantM
   const SOIL_W = 90;
   const SOIL_H = 30;
   const SOIL_COLOR = 0x9b6a3d; // brown
+  const width = garden.cols * COL_GAP + 200;   // 你自己的画布宽度逻辑
+  const height = garden.rows * ROW_GAP + 200;
+  
+  const canvasWidth = app.renderer.width;
+  const canvasHeight = app.renderer.height;
+  
+  // ===== 1️⃣ 加载背景纹理 =====
+  const bgTexture = await PIXI.Assets.load(
+    "/assets/background/mulch2.png"
+  );
+  //const canvasWidth = app.renderer.width;
+  //const canvasHeight = app.renderer.height;
 
-  for (const cell of garden.cells) {
-  //  if (cell.plant !== null ||cell.plant=='empty') continue;
+  // ===== 2️⃣ 创建平铺背景 =====
+  for (let r = 0; r < garden.rows; r++) {
+    for (let c = 0; c < garden.cols; c++) {
 
-    const soil = new PIXI.Graphics();
+      const x = BASE_X + c * COL_GAP;
+      const y = BASE_Y + r * ROW_GAP;
+      const seed=r*100+c;
+     
+      
+      const mulch = new PIXI.Sprite(bgTexture);
+      mulch.rotation = (seededRandom(seed) - 0.5) * 0.1;
+      //mulch.tint = 0xffffff - Math.floor(seededRandom(seed)* 0x111111);
 
-    // 正面坐标（和植物用同一套）
-    const x = BASE_X + cell.col * COL_GAP;
-    const y = BASE_Y + cell.row * ROW_GAP;
+      // 调整大小填满 cell
+      mulch.width = COL_GAP;
+      mulch.height = ROW_GAP;
 
-    // 土块是一个扁平的矩形
-    soil
-      .rect(x , y , COL_GAP, ROW_GAP)
-      .fill({ color: SOIL_COLOR });
+      mulch.position.set(x, y);
 
-    // 越靠前越“压住”后排
-    soil.zIndex = cell.row * 100;
+      mulch.zIndex = 0;
 
-    scene.addChild(soil);
+      scene.addChild(mulch);
+    }
   }
-
+ 
+  
 
   // 并行预加载纹理（同一种植物会出现多次）
   const plantCells = garden.cells.filter((c) => c.plant);
@@ -244,27 +265,31 @@ async function renderGarden(scene: PIXI.Container, garden: GardenState, variantM
     // 底部对齐：像“站在地面上”
     sprite.anchor.set(0.5, 1);
 
-    // 正面坐标：列决定 x，行决定 y
-    const seed=cell.row * 1000 + cell.col * 13;
-    const x = BASE_X + (cell.col+seededRandom(seed)-0.5) * COL_GAP;
-    const y = BASE_Y + (cell.row+seededRandom(seed+1)) * ROW_GAP;
-    console.log(seededRandom(seed))
-    sprite.position.set(x, y);
+    
 
     // 先 fit 到框里（保持比例）
     const meta = variantMap.get(plant);
     const baseHeight = meta?.baseHeight ?? 70;
+    if(meta==null) continue;
+    const fp: [number, number] = (meta?.footprint ?? [1, 1]) as [number, number];
+    // 正面坐标：列决定 x，行决定 y
+    console.log(fp)
+    const seed=cell.row * 1000 + cell.col * 13;
+    const x = BASE_X + (cell.col+Math.floor(fp[1]/2)+seededRandom(seed+0.5)/2) * COL_GAP;
+    const y = BASE_Y + (cell.row+Math.floor(fp[0]/2)-seededRandom(seed+1)/2+1) * ROW_GAP;
+    
+    sprite.position.set(x, y);
 
     fitSpriteByHeight(sprite, baseHeight);
 
     //fitSpriteContain(sprite, ICON_MAX_W, ICON_MAX_H);
 
     // 再做前后深度：row 越大越靠前越大
-    const depth = 1 + cell.row * DEPTH_K;
+    const depth = 1 + cell.row* DEPTH_K;
     sprite.scale.set(sprite.scale.x * depth, sprite.scale.y * depth);
 
     // 遮挡顺序：row 大的在前（盖住后排）
-    sprite.zIndex = cell.row * 100 + cell.col;
+    sprite.zIndex = y;
 
     scene.addChild(sprite);
   }

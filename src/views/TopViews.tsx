@@ -265,12 +265,17 @@ function getCell(next: GardenState, r: number, c: number) {
   /* ================= select plant ================= */
 const choosePlant = (plantId: string | null) => {
   if (!selectedCell) return;
-  if(plantId==null) return;
+  
 
   const next = structuredClone(garden); // ✅ 先复制
 
   const target = getCell(next,selectedCell.r,selectedCell.c);
   if(target==null) return;
+  if(plantId==null){
+    console.log("plant empty");
+    plantId="empty";
+  } 
+ 
 
   if(target.plant==plantId){//same plant, do nothing
     setSelectedCell(null);
@@ -281,12 +286,14 @@ const choosePlant = (plantId: string | null) => {
 
   
   if(target.plant!='empty'){//remove old plant
-    const variant = allVariants.find((v) => v.id === plantId);
+    const variant = allVariants.find((v) => v.id === target.plant);
 
     const fp: [number, number] = (variant?.footprint ?? [1, 1]) as [number, number];
+    
     const cells = footprintCells({ r: selectedCell.r, c: selectedCell.c }, fp);
     for(const rc of cells){
       const cell = getCell(next,rc.r,rc.c); 
+      
       if(cell==null) continue;
       lock[rc.r][rc.c]=false;
       cell.plant='empty';
