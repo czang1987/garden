@@ -1,3 +1,4 @@
+
 {
   "categories": [
     {
@@ -11,7 +12,11 @@
           "icon": "/assets/plants/rose_knockout_red/icon.png",
           "baseHeight": 85,
           "footprint": [1, 1],
-          "tags": ["红", "耐热", "易养"]
+          "tags": ["红", "耐热", "易养"],
+          "sun":"partial",
+          "water":"low",
+          "bloomSeasons":["summer","autumn"],
+          "maintenance": 1
         },
         {
           "id": "rose_iceberg_white",
@@ -19,7 +24,11 @@
           "icon": "/assets/plants/rose_iceberg_white/icon.png",
           "baseHeight": 80,
           "footprint": [1, 1],
-          "tags": ["白", "开花多"]
+          "tags": ["白", "开花多"],
+          "sun":"partial",
+          "water":"low",
+          "bloomSeasons":["summer","autumn"],
+          "maintenance": 1
         }
       ]
     },
@@ -34,7 +43,11 @@
           "icon": "/assets/plants/hydrangea_blue_bush/icon.png",
           "baseHeight": 95,
           "footprint": [1, 2],
-          "tags": ["蓝", "半阴"]
+          "tags": ["蓝", "半阴"],
+          "sun":"shade",
+          "water":"low",
+          "bloomSeasons":["summer","autumn"],
+          "maintenance": 1
         }
       ]
     },
@@ -49,7 +62,11 @@
           "icon": "/assets/plants/tulip_red/icon.png",
           "baseHeight": 60,
           "footprint": [1, 1],
-          "tags": ["红", "春季"]
+          "tags": ["红", "春季"],
+          "sun":"full",
+          "water":"low",
+          "bloomSeasons":["spring"],
+          "maintenance": 1
         }
       ]
     },
@@ -64,7 +81,11 @@
           "icon": "/assets/plants/lavender_english/icon.png",
           "baseHeight": 80,
           "footprint": [1, 1],
-          "tags": ["紫", "香气"]
+          "tags": ["紫", "香气"],
+          "sun":"partial",
+          "water":"low",
+          "bloomSeasons":["summer","autumn"],
+          "maintenance": 1
         }
       ]
     }

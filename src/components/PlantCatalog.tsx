@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { PlantCategory, PlantVariant } from "../type/plants";
 
+
 export default function PlantCatalog({
   categories,
   disabledReason,
@@ -23,6 +24,12 @@ export default function PlantCatalog({
 }) {
   const [activeCat, setActiveCat] = useState<string>("all");
   const [q, setQ] = useState("");
+  const [hovered, setHovered] = useState<{
+    v: PlantVariant;
+    x: number;
+    y: number;
+  } | null>(null);
+
 
   const allVariants = useMemo(() => {
     const list: PlantVariant[] = [];
@@ -100,62 +107,147 @@ export default function PlantCatalog({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(1, minmax(0, 1fr))",
               gap: 10,
             }}
           >
-            {variants.map((v) => {
-              const ok = canSelectVariant(v);
-              const reason = disabledReason ? disabledReason(v) : null;
+          {variants.map((v) => {
+            const ok = canSelectVariant(v);
 
-              return (
-                <button
-                  key={v.id}
-                  onClick={() => ok && onSelectVariant(v)}
-                  disabled={!ok}
-                  title={!ok && reason ? reason : v.name}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: 10,
-                    borderRadius: 10,
-                    border: "1px solid #ddd",
-                    background: "#fff",
-                    opacity: ok ? 1 : 0.45,
-                    cursor: ok ? "pointer" : "not-allowed",
-                    textAlign: "left",
-                  }}
-                >
-                  <img
-                    src={v.icon}
-                    width={44}
-                    height={44}
-                    style={{ objectFit: "contain", borderRadius: 6 }}
-                  />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {v.name}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#888" }}>
-                      {v.footprint?.join("×") ?? "1×1"} · H{v.baseHeight}
-                    </div>
-                    {v.tags?.length ? (
-                      <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                        {v.tags.slice(0, 3).map((t) => (
-                          <span key={t} style={tagStyle}>
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
+            return (
+              <button
+                key={v.id}
+                aria-disabled={!ok}
+                onClick={() => ok && onSelectVariant(v)} // ✅ 自己拦截点击
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setHovered({ v, x: rect.right + 10, y: rect.top });
+                }}
+                onMouseMove={(e) => {
+                  setHovered((prev) =>
+                    prev ? { ...prev, x: e.clientX + 12, y: e.clientY + 12 } : prev
+                  );
+                }}
+                onMouseLeave={() => setHovered(null)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  opacity: ok ? 1 : 0.45,                 // ✅ 模拟禁用
+                  cursor: ok ? "pointer" : "not-allowed",  // ✅ 模拟禁用
+                  textAlign: "left",
+                }}
+              >
+                <img
+                  src={v.icon}
+                  width={44}
+                  height={44}
+                  style={{ objectFit: "contain", borderRadius: 6 }}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {v.name}
                   </div>
-                </button>
-              );
-            })}
+                  <div style={{ fontSize: 11, color: "#888" }}>
+                    {(v.footprint ?? [1, 1]).join("×")} · H{v.baseHeight}
+                  </div>
+                  {v.tags?.length ? (
+                    <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {v.tags.slice(0, 3).map((t) => (
+                        <span
+                          key={t}
+                          style={{
+                            fontSize: 10,
+                            padding: "2px 6px",
+                            borderRadius: 999,
+                            background: "#f3f3f3",
+                            color: "#555",
+                          }}
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </button>
+            );
+          })}
           </div>
         </div>
       </div>
+      {hovered && (
+          <div
+            style={{
+              position: "fixed",
+              left: hovered.x,
+              top: hovered.y,
+              zIndex: 9999,
+              width: 260,
+              padding: 10,
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.98)",
+              border: "1px solid #ddd",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
+              fontSize: 12,
+              pointerEvents: "none", // ✅ 不挡鼠标
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>{hovered.v.name}</div>
+            <div style={{ color: "#666", marginBottom: 8 }}>{hovered.v.id}</div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "80px 1fr", rowGap: 4, columnGap: 6 }}>
+              <div style={{ color: "#777" }}>占格</div>
+              <div>{(hovered.v.footprint ?? [1, 1]).join("×")}</div>
+
+              <div style={{ color: "#777" }}>高度</div>
+              <div>{hovered.v.baseHeight} cm</div>
+
+              <div style={{ color: "#777" }}>日照</div>
+              <div>{formatSun(hovered.v.sun)}</div>
+
+              <div style={{ color: "#777" }}>浇水</div>
+              <div>{formatWater(hovered.v.water)}</div>
+
+              <div style={{ color: "#777" }}>花期</div>
+              <div>{formatSeasons(hovered.v.bloomSeasons)}</div>
+
+              <div style={{ color: "#777" }}>维护</div>
+              <div>{hovered.v.maintenance ?? "-"} / 5</div>
+            </div>
+
+            {hovered.v.tags?.length ? (
+              <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {hovered.v.tags.map((t) => (
+                  <span
+                    key={t}
+                    style={{
+                      fontSize: 10,
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                      background: "#f2f2f2",
+                      color: "#555",
+                    }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )}
     </div>
   );
 }
@@ -179,3 +271,20 @@ const tagStyle = {
   background: "#f3f3f3",
   color: "#555",
 } as const;
+function formatSun(s?: string) {
+  if (s === "full") return "全日照";
+  if (s === "partial") return "半阴";
+  if (s === "shade") return "阴";
+  return "-";
+}
+function formatWater(w?: string) {
+  if (w === "low") return "少";
+  if (w === "medium") return "中";
+  if (w === "high") return "多";
+  return "-";
+}
+function formatSeasons(ss?: string[]) {
+  if (!ss || ss.length === 0) return "-";
+  const map: any = { spring: "春", summer: "夏", autumn: "秋", winter: "冬" };
+  return ss.map((s) => map[s] ?? s).join(" / ");
+}
