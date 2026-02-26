@@ -78,7 +78,14 @@ export default function PlantCatalog({
 
       <div style={{ display: "flex", gap: 12 }}>
         {/* 左侧类目 */}
-        <div style={{ width: 110 }}>
+        <div
+          style={{
+            width: 110,
+            maxHeight: 520,
+            overflowY: "auto",
+            paddingRight: 4,
+          }}
+        >
           <div
             onClick={() => setActiveCat("all")}
             style={catItemStyle(activeCat === "all")}
@@ -109,6 +116,9 @@ export default function PlantCatalog({
               display: "grid",
               gridTemplateColumns: "repeat(1, minmax(0, 1fr))",
               gap: 10,
+              maxHeight: "414px", // 4 cards * 96px + 3 gaps * 10px
+              overflowY: "auto",
+              paddingRight: 6,
             }}
           >
           {variants.map((v) => {
@@ -133,6 +143,7 @@ export default function PlantCatalog({
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
+                  minHeight: 96,
                   padding: 10,
                   borderRadius: 10,
                   border: "1px solid #ddd",

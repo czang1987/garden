@@ -8,7 +8,7 @@ export default function App() {
   const [garden, setGarden] = useState<GardenState>(createGarden(5, 5));
 
   return (
-    <div style={{ padding: 16 }}>
+    <div style={{ padding: 16, maxWidth: 1200, margin: "0 auto" }}>
       {/* 顶部：季节切换（FrontView 会跟着变） */}
       <div style={{ marginBottom: 12, display: "flex", gap: 8 }}>
         {(["spring", "summer", "autumn", "winter"] as Season[]).map((s) => (
@@ -22,7 +22,7 @@ export default function App() {
       </div>
 
       {/* 主体：左右布局 */}
-      <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div>
           <h3 style={{ margin: "0 0 8px 0" }}>Top View（编辑）</h3>
           <TopView garden={garden} onChange={setGarden} />

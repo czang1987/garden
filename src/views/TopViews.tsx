@@ -3,13 +3,36 @@ import * as PIXI from "pixi.js";
 import { resizeGarden,GardenState,printGarden } from "../store/garden";
 import PlantCatalog from "../components/PlantCatalog";
 import type { PlantCatalogData, PlantCategory, PlantVariant } from "../type/plants";
+import { generateAutoLayout, scoreLayout } from "../utils/layoutEngine";
 
 
 
-const GRID_SIZE = 5;
 const CELL_SIZE = 100;
 
 type Cell = { plant: string | null };
+
+function buildLockGrid(garden: GardenState, variants: PlantVariant[]) {
+  const out = Array.from({ length: garden.rows }, () =>
+    Array.from({ length: garden.cols }, () => false)
+  );
+  const variantMap = new Map(variants.map((v) => [v.id, v] as const));
+
+  for (const cell of garden.cells) {
+    if (!cell.plant || cell.plant === "empty") continue;
+    const fp = (variantMap.get(cell.plant)?.footprint ?? [1, 1]) as [number, number];
+    for (let dr = 0; dr < fp[0]; dr++) {
+      for (let dc = 0; dc < fp[1]; dc++) {
+        const rr = cell.row + dr;
+        const cc = cell.col + dc;
+        if (rr >= 0 && rr < garden.rows && cc >= 0 && cc < garden.cols) {
+          out[rr][cc] = true;
+        }
+      }
+    }
+  }
+
+  return out;
+}
 
 
 export default function TopView({
@@ -23,6 +46,7 @@ export default function TopView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<PIXI.Application | null>(null);
   const gridLayerRef = useRef<PIXI.Container | null>(null);
+  const drawVersionRef = useRef(0);
   const [rowsInput, setRowsInput] = useState(garden.rows);
   const [colsInput, setColsInput] = useState(garden.cols);  
   type RC = { r: number; c: number };
@@ -45,6 +69,8 @@ export default function TopView({
       return out;
     }, [categories]);
 
+  const layoutScore = useMemo(() => scoreLayout(garden, allVariants), [garden, allVariants]);
+
  // garden 外部变化时同步输入框
   useEffect(() => {
     
@@ -54,11 +80,7 @@ export default function TopView({
   }, [garden.rows, garden.cols]);
   
 
-  const [lock, setLock] = useState<boolean[][]>(() =>
-    Array.from({ length: garden.rows }, () =>
-      Array.from({ length: garden.cols }, () => false)
-    )
-  );
+  const occupancy = useMemo(() => buildLockGrid(garden, allVariants), [garden, allVariants]);
   function footprintCells(
     anchor: RC,
     fp: [number, number] // [h,w]
@@ -79,7 +101,7 @@ export default function TopView({
 
   // 如果你有 lock[][]，用这个；如果没有，就用 garden.cells 判断是否已占用
   function cellOccupied(r: number, c: number) {
-    return lock[r][c];
+    return !!occupancy[r]?.[c];
   //  return false;
   }
 
@@ -131,16 +153,17 @@ function disabledReason(v: PlantVariant) {
   if (!app) return;
 
   app.renderer.resize(garden.cols * CELL_SIZE, garden.rows * CELL_SIZE);
-  setLock(
-    Array.from({ length: garden.rows }, () =>
-      Array.from({ length: garden.cols }, () => false)
-    )
-  );
 }, [garden.rows, garden.cols]);
 
   const applySize = () => {
     const next = resizeGarden(garden, rowsInput, colsInput);
     onChange(next);
+  };
+
+  const autoGenerate = () => {
+    const next = generateAutoLayout(garden, allVariants, { targetCoverage: 0.62 });
+    onChange(next);
+    setSelectedCell(null);
   };
 
   const [selectedCell, setSelectedCell] = useState<{ r: number; c: number } | null>(null);
@@ -194,12 +217,13 @@ function disabledReason(v: PlantVariant) {
  const drawGrid = async () => {
   const layer = gridLayerRef.current;
   if (!layer) return;
+  const drawVersion = ++drawVersionRef.current;
 
   layer.removeChildren();
 
-  for (let r = 0; r < GRID_SIZE; r++) {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      const cell = garden.cells[r*garden.rows+c];
+  for (let r = 0; r < garden.rows; r++) {
+    for (let c = 0; c < garden.cols; c++) {
+      const cell = getCell(garden, r, c) ?? { row: r, col: c, plant: "empty" };
       const isSelected =
         selectedCell?.r === r && selectedCell?.c === c;
 
@@ -245,6 +269,7 @@ function disabledReason(v: PlantVariant) {
         const texture = await PIXI.Assets.load(
           `/assets/plants/${cell.plant}/icon.png`
         );
+        if (drawVersion !== drawVersionRef.current) return;
 
         const sprite = new PIXI.Sprite(texture);
         sprite.width = 64;
@@ -295,7 +320,6 @@ const choosePlant = (plantId: string | null) => {
       const cell = getCell(next,rc.r,rc.c); 
       
       if(cell==null) continue;
-      lock[rc.r][rc.c]=false;
       cell.plant='empty';
     }
   } 
@@ -308,7 +332,6 @@ const choosePlant = (plantId: string | null) => {
     for(const rc of cells){
       const cell = getCell(next,rc.r,rc.c);
       if(cell==null) continue;
-      lock[rc.r][rc.c]=true;
       cell.plant="empty";//temporarily set to empty to avoid blocking itself
     }
     
@@ -348,6 +371,28 @@ return (
       </label>
 
       <button onClick={applySize}>应用</button>
+      <button onClick={autoGenerate} disabled={allVariants.length === 0}>
+        自动生成布局
+      </button>
+      <div
+        style={{
+          marginLeft: 12,
+          padding: "6px 10px",
+          border: "1px solid #ddd",
+          borderRadius: 8,
+          background: "#fafafa",
+          minWidth: 220,
+          fontSize: 12,
+          lineHeight: 1.6,
+        }}
+      >
+        <div style={{ fontWeight: 700 }}>布局评分: {layoutScore.total}/100</div>
+        <div>覆盖度: {layoutScore.breakdown.coverage}</div>
+        <div>多样性: {layoutScore.breakdown.diversity}</div>
+        <div>当季花期: {layoutScore.breakdown.seasonalBloom}</div>
+        <div>维护成本: {layoutScore.breakdown.maintenance}</div>
+        <div>邻接关系: {layoutScore.breakdown.adjacency}</div>
+      </div>
     </div>
 
     <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>

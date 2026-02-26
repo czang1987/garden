@@ -1,4 +1,3 @@
-
 {
   "categories": [
     {
@@ -11,11 +10,21 @@
           "name": "Knock Out（红）",
           "icon": "/assets/plants/rose_knockout_red/icon.png",
           "baseHeight": 85,
-          "footprint": [1, 1],
-          "tags": ["红", "耐热", "易养"],
-          "sun":"partial",
-          "water":"low",
-          "bloomSeasons":["summer","autumn"],
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "红",
+            "耐热",
+            "易养"
+          ],
+          "sun": "partial",
+          "water": "low",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
           "maintenance": 1
         },
         {
@@ -23,11 +32,20 @@
           "name": "Iceberg（白）",
           "icon": "/assets/plants/rose_iceberg_white/icon.png",
           "baseHeight": 80,
-          "footprint": [1, 1],
-          "tags": ["白", "开花多"],
-          "sun":"partial",
-          "water":"low",
-          "bloomSeasons":["summer","autumn"],
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "白",
+            "开花多"
+          ],
+          "sun": "partial",
+          "water": "low",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
           "maintenance": 1
         }
       ]
@@ -42,11 +60,20 @@
           "name": "大花绣球（蓝）",
           "icon": "/assets/plants/hydrangea_blue_bush/icon.png",
           "baseHeight": 95,
-          "footprint": [1, 2],
-          "tags": ["蓝", "半阴"],
-          "sun":"shade",
-          "water":"low",
-          "bloomSeasons":["summer","autumn"],
+          "footprint": [
+            1,
+            2
+          ],
+          "tags": [
+            "蓝",
+            "半阴"
+          ],
+          "sun": "shade",
+          "water": "low",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
           "maintenance": 1
         }
       ]
@@ -61,11 +88,19 @@
           "name": "红郁金香",
           "icon": "/assets/plants/tulip_red/icon.png",
           "baseHeight": 60,
-          "footprint": [1, 1],
-          "tags": ["红", "春季"],
-          "sun":"full",
-          "water":"low",
-          "bloomSeasons":["spring"],
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "红",
+            "春季"
+          ],
+          "sun": "full",
+          "water": "low",
+          "bloomSeasons": [
+            "spring"
+          ],
           "maintenance": 1
         }
       ]
@@ -80,15 +115,231 @@
           "name": "英格兰薰衣草",
           "icon": "/assets/plants/lavender_english/icon.png",
           "baseHeight": 80,
-          "footprint": [1, 1],
-          "tags": ["紫", "香气"],
-          "sun":"partial",
-          "water":"low",
-          "bloomSeasons":["summer","autumn"],
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "紫",
+            "香气"
+          ],
+          "sun": "partial",
+          "water": "low",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
+          "maintenance": 1
+        }
+      ]
+    },
+    {
+      "id": "ny_shrubs",
+      "name": "纽约常见灌木",
+      "variants": [
+        {
+          "id": "hydrangea_paniculata_limelight",
+          "name": "圆锥绣球 Limelight",
+          "icon": "/assets/plants/hydrangea_paniculata_limelight/icon.png",
+          "baseHeight": 180,
+          "footprint": [
+            1,
+            2
+          ],
+          "tags": [
+            "绣球",
+            "庭院主景",
+            "耐寒"
+          ],
+          "sun": "partial",
+          "water": "medium",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
+          "maintenance": 2
+        },
+        {
+          "id": "boxwood_green_mountain",
+          "name": "黄杨 Green Mountain",
+          "icon": "/assets/plants/boxwood_green_mountain/icon.png",
+          "baseHeight": 120,
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "常绿",
+            "低维护",
+            "边界"
+          ],
+          "sun": "partial",
+          "water": "low",
+          "bloomSeasons": [],
+          "maintenance": 1
+        },
+        {
+          "id": "arborvitae_emerald_green",
+          "name": "侧柏 Emerald Green",
+          "icon": "/assets/plants/arborvitae_emerald_green/icon.png",
+          "baseHeight": 220,
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "隐私屏障",
+            "常绿",
+            "耐寒"
+          ],
+          "sun": "full",
+          "water": "medium",
+          "bloomSeasons": [],
+          "maintenance": 2
+        }
+      ]
+    },
+    {
+      "id": "ny_perennials",
+      "name": "纽约常见多年生",
+      "variants": [
+        {
+          "id": "echinacea_purple_coneflower",
+          "name": "紫锥花",
+          "icon": "/assets/plants/echinacea_purple_coneflower/icon.png",
+          "baseHeight": 90,
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "传粉友好",
+            "耐旱",
+            "多年生"
+          ],
+          "sun": "full",
+          "water": "low",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
+          "maintenance": 1
+        },
+        {
+          "id": "rudbeckia_black_eyed_susan",
+          "name": "黑心金光菊",
+          "icon": "/assets/plants/rudbeckia_black_eyed_susan/icon.png",
+          "baseHeight": 80,
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "耐热",
+            "明黄色",
+            "多年生"
+          ],
+          "sun": "full",
+          "water": "low",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
+          "maintenance": 1
+        },
+        {
+          "id": "hosta_frances_williams",
+          "name": "玉簪 Frances Williams",
+          "icon": "/assets/plants/hosta_frances_williams/icon.png",
+          "baseHeight": 60,
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "耐阴",
+            "观叶",
+            "多年生"
+          ],
+          "sun": "shade",
+          "water": "medium",
+          "bloomSeasons": [
+            "summer"
+          ],
+          "maintenance": 2
+        },
+        {
+          "id": "peony_sarah_bernhardt",
+          "name": "芍药 Sarah Bernhardt",
+          "icon": "/assets/plants/peony_sarah_bernhardt/icon.png",
+          "baseHeight": 95,
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "大花",
+            "春夏",
+            "多年生"
+          ],
+          "sun": "full",
+          "water": "medium",
+          "bloomSeasons": [
+            "spring",
+            "summer"
+          ],
+          "maintenance": 2
+        }
+      ]
+    },
+    {
+      "id": "ny_grasses",
+      "name": "纽约常见观赏草",
+      "variants": [
+        {
+          "id": "panicum_northwind",
+          "name": "柳枝稷 Northwind",
+          "icon": "/assets/plants/panicum_northwind/icon.png",
+          "baseHeight": 150,
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "观赏草",
+            "秋色",
+            "耐寒"
+          ],
+          "sun": "full",
+          "water": "low",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
+          "maintenance": 1
+        },
+        {
+          "id": "schizachyrium_little_bluestem",
+          "name": "小须芒草 Little Bluestem",
+          "icon": "/assets/plants/schizachyrium_little_bluestem/icon.png",
+          "baseHeight": 100,
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            "本土",
+            "耐旱",
+            "观赏草"
+          ],
+          "sun": "full",
+          "water": "low",
+          "bloomSeasons": [
+            "autumn"
+          ],
           "maintenance": 1
         }
       ]
     }
-    
   ]
 }
