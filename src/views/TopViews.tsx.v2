@@ -1,0 +1,139 @@
+import { useEffect, useRef, useState } from "react";
+import * as PIXI from "pixi.js";
+import { GardenState, Cell, Plant } from "../store/garden";
+
+const CELL_SIZE = 60;
+
+interface TopViewProps {
+  garden: GardenState;
+  onChange: (next: GardenState) => void;
+}
+
+export function TopView({ garden, onChange }: TopViewProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [app, setApp] = useState<PIXI.Application | null>(null);
+
+  // 当前选中的格子
+  const [selectedCell, setSelectedCell] = useState<Cell | null>(null);
+  const [plantList, setPlantList] = useState<{ name: string; icon: string }[]>([]);
+
+  // 初始化 Pixi canvas
+  useEffect(() => {
+    let mounted = true;
+
+    async function initApp() {
+      const pixiApp = new PIXI.Application();
+      await pixiApp.init({
+        width: garden.cols * CELL_SIZE,
+        height: garden.rows * CELL_SIZE,
+        backgroundColor: 0xf4f4f4,
+      });
+
+      if (!mounted) return;
+
+      ref.current?.appendChild(pixiApp.view);
+      setApp(pixiApp);
+
+      renderGrid(pixiApp, garden, setSelectedCell, onChange);
+    }
+
+    initApp();
+
+    return () => {
+      mounted = false;
+      app?.destroy(true);
+    };
+  }, []);
+
+  // 每次 garden 更新重新渲染
+  useEffect(() => {
+    if (!app) return;
+    app.stage.removeChildren();
+    renderGrid(app, garden, setSelectedCell, onChange);
+  }, [garden, app]);
+
+  // 从 JSON 读取植物列表
+  useEffect(() => {
+    async function loadPlants() {
+      const res = await fetch("/assets/plants/index.json");
+      const data = await res.json();
+      setPlantList(data.plants);
+    }
+
+    loadPlants();
+  }, []);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div ref={ref} />
+
+      {/* 植物选择面板 */}
+      {selectedCell && plantList.length > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            top: selectedCell.row * CELL_SIZE,
+            left: selectedCell.col * CELL_SIZE + CELL_SIZE,
+            background: "white",
+            border: "1px solid #ccc",
+            padding: 5,
+            display: "flex",
+            flexDirection: "column",
+            zIndex: 10,
+          }}
+        >
+          {plantList.map((p) => (
+            <button
+              key={p.name}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: 4,
+                padding: 2,
+                cursor: "pointer",
+              }}
+              onClick={() => {
+                const next = structuredClone(garden);
+                const target = next.cells.find(
+                  (c) => c.row === selectedCell.row && c.col === selectedCell.col
+                )!;
+                target.plant = p.name as Plant;
+                onChange(next);
+                setSelectedCell(null);
+              }}
+            >
+              <img
+                src={p.icon}
+                alt={p.name}
+                style={{ width: 40, height: 40, marginRight: 5 }}
+              />
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 渲染格子函数
+function renderGrid(
+  app: PIXI.Application,
+  garden: GardenState,
+  setSelectedCell: (cell: Cell | null) => void,
+  onChange: (next: GardenState) => void
+) {
+  garden.cells.forEach((cell) => {
+    const g = new PIXI.Graphics();
+    g.lineStyle(1, 0x999999);
+    g.beginFill(0xffffff);
+    g.drawRect(cell.col * CELL_SIZE, cell.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    g.endFill();
+
+    g.interactive = true;
+    g.buttonMode = true;
+    g.on("pointerdown", () => setSelectedCell(cell));
+
+    app.stage.addChild(g);
+  });
+}

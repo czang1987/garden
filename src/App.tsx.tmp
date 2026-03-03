@@ -1,0 +1,17 @@
+import React, { useState } from "react";
+import GardenCanvas from "./components/GardenCanvas";
+
+import layout from "./data/layout.json";
+import plants from "./data/plants.json";
+
+export default function App() {
+  const [season, setSeason] = useState<"spring"|"summer"|"autumn"|"winter">("spring");
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>Garden Simulator</h1>
+      
+      <GardenCanvas layout={layout} plants={plants} season={season} />
+    </div>
+  );
+}

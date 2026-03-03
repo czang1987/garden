@@ -1,0 +1,44 @@
+import { useState } from 'react'
+import { createGarden, GardenState } from './store/garden'
+import  TopView  from './views/TopViews'
+import { FrontView } from './views/FrontView'
+
+export default function App() {
+  const [garden, setGarden] = useState<GardenState>(
+    createGarden()
+  )
+  const [view, setView] = useState<'top' | 'front'>('top')
+  console.log("garden updated", garden);
+  return (
+    <div>
+      <div style={{ marginBottom: 10 }}>
+        <button onClick={() => setView('top')}>俯视角</button>
+        <button onClick={() => setView('front')}>正面视角</button>
+
+        {view === 'front' && (
+          <>
+            {(['spring', 'summer', 'autumn', 'winter'] as const).map(
+              s => (
+                <button
+                  key={s}
+                  onClick={() =>
+                    setGarden({ ...garden, season: s })
+                  }
+                >
+                  {s}
+                </button>
+              )
+            )}
+          </>
+        )}
+      </div>
+      
+
+      {view === 'top' ? (
+        <TopView garden={garden} onChange={setGarden} />
+      ) : (
+        <FrontView garden={garden} />
+      )}
+    </div>
+  )
+}

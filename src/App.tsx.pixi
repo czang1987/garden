@@ -1,0 +1,53 @@
+import React, { useEffect, useRef, useState } from "react";
+import { GardenStage } from "./pixi/GardenStage";
+import { createPlant } from "./pixi/PlantSprite";
+
+const plants = [
+  { id: "hydrangea", x: 300, y: 320 },
+  { id: "hydrangea", x: 220, y: 260 },
+  { id: "hydrangea", x: 380, y: 240 }
+];
+
+export default function App() {
+  const ref = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<GardenStage | null>(null);
+  const [season, setSeason] = useState("spring");
+
+  useEffect(() => {
+    if (!ref.current) return;
+
+    if (!stageRef.current) {
+      stageRef.current = new GardenStage(ref.current);
+    }
+
+    const stage = stageRef.current;
+    stage.clear();
+
+    plants
+      .sort((a, b) => a.y - b.y) // 前后遮挡
+      .forEach(p => {
+        const sprite = createPlant(
+          `/assets/plants/hydrangea/${season}.png`,
+          p.x,
+          p.y
+        );
+        stage.container.addChild(sprite);
+      });
+  }, [season]);
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>旅行青蛙风 · 花园</h2>
+
+      <div style={{ marginBottom: 12 }}>
+        {["spring", "summer", "autumn", "winter"].map(s => (
+          <button key={s} onClick={() => setSeason(s)}>
+            {s}
+          </button>
+        ))}
+      </div>
+
+      <div ref={ref} />
+    </div>
+  );
+}

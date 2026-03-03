@@ -226,6 +226,7 @@ function disabledReason(v: PlantVariant) {
       const cell = getCell(garden, r, c) ?? { row: r, col: c, plant: "empty" };
       const isSelected =
         selectedCell?.r === r && selectedCell?.c === c;
+      const isOccupied = cellOccupied(r, c);
 
       /* ===== 1. 画格子底色 ===== */
       const g = new PIXI.Graphics();
@@ -234,10 +235,10 @@ function disabledReason(v: PlantVariant) {
 
 
       // 背景色逻辑
-      if (cell.plant && cell.plant!='empty') {
-        // 已种植物：白底（植物会覆盖）
+      if (isOccupied) {
+        // lock / occupied：灰底
         g.rect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-         .fill({ color: 0xffffff });
+         .fill({ color: 0xe3e3e3 });
       } else if (isSelected) {
         // 选中但没植物：蓝色
         g.rect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE)

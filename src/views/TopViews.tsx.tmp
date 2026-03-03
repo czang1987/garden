@@ -1,0 +1,74 @@
+import { useEffect, useRef, useState } from "react";
+import * as PIXI from "pixi.js";
+import { GardenState, Cell, Plant } from "../store/garden";
+
+const CELL_SIZE = 60;
+
+interface TopViewProps {
+  garden: GardenState;
+  onChange: (next: GardenState) => void;
+}
+
+export function TopView({ garden, onChange }: TopViewProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [app, setApp] = useState<PIXI.Application | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function init() {
+      const pixiApp = new PIXI.Application();
+      await pixiApp.init({
+        width: garden.cols * CELL_SIZE,
+        height: garden.rows * CELL_SIZE,
+        backgroundColor: 0xf4f4f4,
+      });
+
+      if (!mounted) return;
+
+      // ✅ append canvas
+      ref.current?.appendChild(pixiApp.view);
+      setApp(pixiApp);
+
+      renderGrid(pixiApp, garden);
+    }
+
+    init();
+
+    return () => {
+      mounted = false;
+      app?.destroy(true);
+    };
+  }, []); // 只初始化一次
+
+  // 每次 garden 更新时重新渲染
+  useEffect(() => {
+    if (!app) return;
+    app.stage.removeChildren();
+    renderGrid(app, garden);
+  }, [garden, app]);
+
+  return <div ref={ref} />;
+}
+
+// 渲染格子函数
+function renderGrid(app: PIXI.Application, garden: GardenState) {
+  garden.cells.forEach((cell: Cell) => {
+    const g = new PIXI.Graphics();
+    g.lineStyle(1, 0x999999);
+    g.beginFill(cell.plant === "empty" ? 0xffffff : 0xaad5aa);
+    g.drawRect(cell.col * CELL_SIZE, cell.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    g.endFill();
+
+    g.interactive = true;
+    g.buttonMode = true;
+    g.on("pointerdown", () => {
+      const next = structuredClone(garden);
+      const target = next.cells.find(c => c.row === cell.row && c.col === cell.col)!;
+      target.plant = target.plant === "empty" ? "hydrangea" : "empty";
+      onChange(next);
+    });
+
+    app.stage.addChild(g);
+  });
+}

@@ -65,16 +65,37 @@
             2
           ],
           "tags": [
-            "蓝",
-            "半阴"
+            "蓝"
           ],
-          "sun": "shade",
+          "sun": "full",
           "water": "low",
           "bloomSeasons": [
             "summer",
             "autumn"
           ],
           "maintenance": 1
+        },
+        {
+          "id": "hydrangea_paniculata_limelight",
+          "name": "圆锥绣球 Limelight",
+          "icon": "/assets/plants/hydrangea_paniculata_limelight/icon.png",
+          "baseHeight": 120,
+          "footprint": [
+            1,
+            2
+          ],
+          "tags": [
+            "绣球",
+            "庭院主景",
+            "耐寒"
+          ],
+          "sun": "partial",
+          "water": "medium",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
+          "maintenance": 2
         }
       ]
     },
@@ -134,31 +155,10 @@
       ]
     },
     {
-      "id": "ny_shrubs",
-      "name": "纽约常见灌木",
+      "id": "shrubs",
+      "name": "灌木",
       "variants": [
-        {
-          "id": "hydrangea_paniculata_limelight",
-          "name": "圆锥绣球 Limelight",
-          "icon": "/assets/plants/hydrangea_paniculata_limelight/icon.png",
-          "baseHeight": 180,
-          "footprint": [
-            1,
-            2
-          ],
-          "tags": [
-            "绣球",
-            "庭院主景",
-            "耐寒"
-          ],
-          "sun": "partial",
-          "water": "medium",
-          "bloomSeasons": [
-            "summer",
-            "autumn"
-          ],
-          "maintenance": 2
-        },
+        
         {
           "id": "boxwood_green_mountain",
           "name": "黄杨 Green Mountain",
@@ -201,13 +201,13 @@
     },
     {
       "id": "ny_perennials",
-      "name": "纽约常见多年生",
+      "name": "多年生",
       "variants": [
         {
           "id": "echinacea_purple_coneflower",
           "name": "紫锥花",
           "icon": "/assets/plants/echinacea_purple_coneflower/icon.png",
-          "baseHeight": 90,
+          "baseHeight": 60,
           "footprint": [
             1,
             1
@@ -251,7 +251,7 @@
           "id": "hosta_frances_williams",
           "name": "玉簪 Frances Williams",
           "icon": "/assets/plants/hosta_frances_williams/icon.png",
-          "baseHeight": 60,
+          "baseHeight": 45,
           "footprint": [
             1,
             1
@@ -272,7 +272,7 @@
           "id": "peony_sarah_bernhardt",
           "name": "芍药 Sarah Bernhardt",
           "icon": "/assets/plants/peony_sarah_bernhardt/icon.png",
-          "baseHeight": 95,
+          "baseHeight": 90,
           "footprint": [
             1,
             1
@@ -282,7 +282,7 @@
             "春夏",
             "多年生"
           ],
-          "sun": "full",
+          "sun": "partial",
           "water": "medium",
           "bloomSeasons": [
             "spring",
@@ -294,13 +294,14 @@
     },
     {
       "id": "ny_grasses",
-      "name": "纽约常见观赏草",
+      "name": "观赏草",
       "variants": [
         {
           "id": "panicum_northwind",
           "name": "柳枝稷 Northwind",
           "icon": "/assets/plants/panicum_northwind/icon.png",
-          "baseHeight": 150,
+          "baseHeight": 120,
+          "renderScale": 0.9,
           "footprint": [
             1,
             1
@@ -323,6 +324,7 @@
           "name": "小须芒草 Little Bluestem",
           "icon": "/assets/plants/schizachyrium_little_bluestem/icon.png",
           "baseHeight": 100,
+          "renderScale": 1.55,
           "footprint": [
             1,
             1

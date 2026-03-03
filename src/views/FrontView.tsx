@@ -20,6 +20,7 @@ type PlantVariant = {
   icon: string;
   baseHeight: number;
   footprint?: [number, number];
+  renderScale?: number;
 };
 
 type PlantCatalogData = {
@@ -278,6 +279,7 @@ export function FrontView({ garden }: { garden: GardenState }) {
         const meta = variantMap.get(plantId);
         const fp = (meta?.footprint ?? [1, 1]) as [number, number];
         const baseHeight = meta?.baseHeight ?? 70;
+        const renderScale = meta?.renderScale ?? 1;
 
         const tex = await loadPlantTexture(plantId, garden.season);
         if (canceled) return;
@@ -294,7 +296,7 @@ export function FrontView({ garden }: { garden: GardenState }) {
           .fill({ color: 0x000000, alpha: 0.12 });
 
         // size + depth
-        fitSpriteByHeight(sprite, baseHeight);
+        fitSpriteByHeight(sprite, baseHeight * renderScale);
         const depth = 1 + cell.row * DEPTH_K;
         sprite.scale.set(sprite.scale.x * depth, sprite.scale.y * depth);
 
