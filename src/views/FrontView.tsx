@@ -6,7 +6,7 @@ import type { GardenState } from "../store/garden";
 const BASE_X = 140;
 const BASE_Y = 120;
 const COL_GAP = 110;
-const ROW_GAP = 85;
+const DEFAULT_ROW_GAP = 85;
 
 // 砖圈厚度
 const FRAME = 18;
@@ -71,14 +71,14 @@ function isAnchorCell(
   return true;
 }
 
-function footprintCenterBottom(r: number, c: number, fp: [number, number]) {
+function footprintCenterBottom(r: number, c: number, fp: [number, number], rowGap: number) {
   const seed=r * 1000 + c * 13;
   const [h, w] = fp;
   const x0 = BASE_X + (c+seededRandom(seed)/4 )* COL_GAP;
-  const y0 = BASE_Y + (r-seededRandom(seed)/4) * ROW_GAP;
+  const y0 = BASE_Y + (r-seededRandom(seed)/4) * rowGap;
   return {
     cx: x0 + (w * COL_GAP) / 2,
-    by: y0 + h * ROW_GAP,
+    by: y0 + h * rowGap,
   };
 }
 
@@ -123,7 +123,7 @@ function drawBrickFrameEdges(
 }
 
 
-async function drawMulchPerCell(layer: PIXI.Container, garden: GardenState) {
+async function drawMulchPerCell(layer: PIXI.Container, garden: GardenState, rowGap: number) {
   const tex = await PIXI.Assets.load("/assets/backgrounds/mulch2.png");
 
   for (let r = 0; r < garden.rows; r++) {
@@ -131,12 +131,12 @@ async function drawMulchPerCell(layer: PIXI.Container, garden: GardenState) {
       const tile = new PIXI.TilingSprite({
         texture: tex,
         width: COL_GAP,
-        height: ROW_GAP,
+        height: rowGap,
       });
       tile.tileScale.x = COL_GAP / tex.width;
-      tile.tileScale.y = ROW_GAP / tex.height;
+      tile.tileScale.y = rowGap / tex.height;
 
-      tile.position.set(BASE_X + c * COL_GAP, BASE_Y + r * ROW_GAP);
+      tile.position.set(BASE_X + c * COL_GAP, BASE_Y + r * rowGap);
 
       const seed = r * 10007 + c * 97;
 
@@ -168,7 +168,13 @@ function addPaperOverlay(scene: PIXI.Container, w: number, h: number) {
   scene.addChild(overlay);
 }
 
-export function FrontView({ garden }: { garden: GardenState }) {
+export function FrontView({
+  garden,
+  rowGap = DEFAULT_ROW_GAP,
+}: {
+  garden: GardenState;
+  rowGap?: number;
+}) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<PIXI.Application | null>(null);
   const sceneRef = useRef<PIXI.Container | null>(null);
@@ -245,11 +251,11 @@ export function FrontView({ garden }: { garden: GardenState }) {
 
       // grid 区域大小（以 row/col 间距定义）
       const gridW = garden.cols * COL_GAP;
-      const gridH = garden.rows * ROW_GAP;
+      const gridH = garden.rows * rowGap;
 
       // 画布大小：给一点边距，避免顶到边缘
       const canvasW = BASE_X + gridW + 140;
-      const canvasH = BASE_Y + gridH + 140;
+      const canvasH = BASE_Y + gridW + 140;
       app.renderer.resize(canvasW, canvasH);
 
       // 分层
@@ -267,7 +273,7 @@ export function FrontView({ garden }: { garden: GardenState }) {
       drawBrickFrameEdges(frameLayer, gridW, gridH, BASE_X, BASE_Y, 18); 
 
       // 每格 mulch（写实）
-      await drawMulchPerCell(bgLayer, garden);
+      await drawMulchPerCell(bgLayer, garden, rowGap);
 
       // 画植物（含 footprint 去重 + 跨格居中）
       for (const cell of garden.cells) {
@@ -287,7 +293,7 @@ export function FrontView({ garden }: { garden: GardenState }) {
         const sprite = new PIXI.Sprite(tex);
         sprite.anchor.set(0.5, 1);
 
-        const { cx, by } = footprintCenterBottom(cell.row, cell.col, fp);
+        const { cx, by } = footprintCenterBottom(cell.row, cell.col, fp, rowGap);
         sprite.position.set(cx, by);
 
         // 阴影（椭圆，写实又轻）
@@ -334,7 +340,7 @@ export function FrontView({ garden }: { garden: GardenState }) {
     return () => {
       canceled = true;
     };
-  }, [garden, variantMap]);
+  }, [garden, variantMap, rowGap]);
 
   return <div ref={mountRef} />;
 }
