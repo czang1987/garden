@@ -9,7 +9,11 @@
           "id": "rose_knockout_red",
           "name": "Knock Out（红）",
           "icon": "/assets/plants/rose_knockout_red/icon.png",
-          "baseHeight": 85,
+          "link":"https://www.homedepot.com/p/KNOCK-OUT-2-gal-Red-Double-Knock-Out-Rose-With-Red-Flowers-HD3159/339238374",
+          "baseHeight": 48,
+          "baseWidth":48,
+          "zone":"5-11",
+          "sizeref": "h4w4",
           "footprint": [
             1,
             1
@@ -19,8 +23,8 @@
             "耐热",
             "易养"
           ],
-          "sun": "partial",
-          "water": "low",
+          "sun": "full",
+          "water": "twice",
           "bloomSeasons": [
             "summer",
             "autumn"
@@ -31,7 +35,10 @@
           "id": "rose_iceberg_white",
           "name": "Iceberg（白）",
           "icon": "/assets/plants/rose_iceberg_white/icon.png",
-          "baseHeight": 80,
+          "link":"https://www.homedepot.com/p/DIRECT-GARDENING-Iceberg-White-Flowering-Climbing-Rose-Bush-Dormant-Bare-Root-Starter-Plant-1-Pack-99229/334435255?MERCH=REC-_-pipinstock-_-329147068-_-0-_-n/a-_-n/a-_-n/a-_-n/a-_-n/a",
+          "baseHeight": 48,
+          "baseWidth":36,
+          "zone":"5-9",
           "footprint": [
             1,
             1
@@ -40,8 +47,8 @@
             "白",
             "开花多"
           ],
-          "sun": "partial",
-          "water": "low",
+          "sun": "full",
+          "water": "twice",
           "bloomSeasons": [
             "summer",
             "autumn"
@@ -59,7 +66,10 @@
           "id": "hydrangea_blue_bush",
           "name": "大花绣球（蓝）",
           "icon": "/assets/plants/hydrangea_blue_bush/icon.png",
-          "baseHeight": 95,
+          "link":"https://www.lowes.com/pd/Southern-Living-Plant-Collection-2-5-Qt-Hydrangea-Big-Daddy/5015643673",
+          "zone":"4-9",
+          "baseHeight": 72,
+          "baseWidth":72,
           "footprint": [
             1,
             2
@@ -67,8 +77,8 @@
           "tags": [
             "蓝"
           ],
-          "sun": "full",
-          "water": "low",
+          "sun": "partial",
+          "water": "twice",
           "bloomSeasons": [
             "summer",
             "autumn"
@@ -79,7 +89,10 @@
           "id": "hydrangea_paniculata_limelight",
           "name": "圆锥绣球 Limelight",
           "icon": "/assets/plants/hydrangea_paniculata_limelight/icon.png",
-          "baseHeight": 120,
+          "link":"https://www.lowes.com/pd/Proven-Winners-Multicolor-Hydrangea-Flowering-Shrub-in-1-Quart-In-Pot-With-Soil/5014250349",
+          "zone":"3-9",
+          "baseHeight": 84,
+          "baseWidth": 84,
           "footprint": [
             1,
             2
@@ -90,7 +103,7 @@
             "耐寒"
           ],
           "sun": "partial",
-          "water": "medium",
+          "water": "dry",
           "bloomSeasons": [
             "summer",
             "autumn"
@@ -108,7 +121,10 @@
           "id": "tulip_red",
           "name": "红郁金香",
           "icon": "/assets/plants/tulip_red/icon.png",
-          "baseHeight": 60,
+          "link":"https://www.lowes.com/pd/Tulip-Purple-Forced-Bulbs-1-0PT-4-Pack/5013350025",
+          "zone":"3-9",
+          "baseHeight": 10,
+          "baseWidth":6,
           "footprint": [
             1,
             1
@@ -118,7 +134,7 @@
             "春季"
           ],
           "sun": "full",
-          "water": "low",
+          "water": "dry",
           "bloomSeasons": [
             "spring"
           ],
@@ -135,7 +151,11 @@
           "id": "lavender_english",
           "name": "英格兰薰衣草",
           "icon": "/assets/plants/lavender_english/icon.png",
-          "baseHeight": 80,
+          "link":"https://www.lowes.com/pd/Spring-Hill-Nurseries-Lavender-Lightsaber-Speedwell-Perennial-Plant-in-1-Pack-Bareroot/5013483433",
+          "baseWidth":20,
+          "baseHeight": 30,
+          "zone":"4-8",
+          
           "footprint": [
             1,
             1
@@ -144,8 +164,8 @@
             "紫",
             "香气"
           ],
-          "sun": "partial",
-          "water": "low",
+          "sun": "full",
+          "water": "dry",
           "bloomSeasons": [
             "summer",
             "autumn"
@@ -163,7 +183,10 @@
           "id": "boxwood_green_mountain",
           "name": "黄杨 Green Mountain",
           "icon": "/assets/plants/boxwood_green_mountain/icon.png",
-          "baseHeight": 120,
+          "link":"https://www.lowes.com/pd/Monrovia-Boxwood-Green-Mountain-Feature-Shrub-in-1-73-Gallon-Pot-1-Pack-with-Yellow-Blooms/5017782423",
+          "zone":"4-9",
+          "baseHeight": 60,
+          "baseWidth": 60,
           "footprint": [
             1,
             1
@@ -173,8 +196,8 @@
             "低维护",
             "边界"
           ],
-          "sun": "partial",
-          "water": "low",
+          "sun": "full",
+          "water": "dry",
           "bloomSeasons": [],
           "maintenance": 1
         },
@@ -182,7 +205,10 @@
           "id": "arborvitae_emerald_green",
           "name": "侧柏 Emerald Green",
           "icon": "/assets/plants/arborvitae_emerald_green/icon.png",
-          "baseHeight": 220,
+          "link":"https://www.lowes.com/pd/Emerald-Green-Arborvitae-Screening-Shrub-in-2-5-Quart-Pot/5014907483",
+          "baseWidth":48,
+          "baseHeight": 180,
+          "zone":"3-9",
           "footprint": [
             1,
             1
@@ -193,7 +219,7 @@
             "耐寒"
           ],
           "sun": "full",
-          "water": "medium",
+          "water": "dry",
           "bloomSeasons": [],
           "maintenance": 2
         }
@@ -207,7 +233,10 @@
           "id": "echinacea_purple_coneflower",
           "name": "紫锥花",
           "icon": "/assets/plants/echinacea_purple_coneflower/icon.png",
-          "baseHeight": 60,
+          "link":"https://www.lowes.com/pd/Direct-Gardening-Purple-Flowering-Pow-Wow-Wild-Berry-Coneflower-Dormant-Plant-in-1-Pack-Bareroot-1-Pack/5016126513",
+          "baseHeight": 36,
+          "baseWidth":18,
+          "zone":"3-9",
           "footprint": [
             1,
             1
@@ -218,7 +247,7 @@
             "多年生"
           ],
           "sun": "full",
-          "water": "low",
+          "water": "dry",
           "bloomSeasons": [
             "summer",
             "autumn"
@@ -229,7 +258,11 @@
           "id": "rudbeckia_black_eyed_susan",
           "name": "黑心金光菊",
           "icon": "/assets/plants/rudbeckia_black_eyed_susan/icon.png",
-          "baseHeight": 80,
+          "link":"https://www.lowes.com/pd/Ferry-Morse-LCP-BLACKN-EYED-SUSAN-RUDBECKIA/5015733363?idProductFound=false&idExtracted=false",
+          "zone":"2-11",
+
+          "baseHeight": 24,
+          "baseWidth":12,
           "footprint": [
             1,
             1
@@ -240,7 +273,7 @@
             "多年生"
           ],
           "sun": "full",
-          "water": "low",
+          "water": "dry",
           "bloomSeasons": [
             "summer",
             "autumn"
@@ -251,7 +284,10 @@
           "id": "hosta_frances_williams",
           "name": "玉簪 Frances Williams",
           "icon": "/assets/plants/hosta_frances_williams/icon.png",
-          "baseHeight": 45,
+          "link":"https://www.lowes.com/pd/Van-Zyverden-Van-Zyverden-Hosta-Minuteman-Set-of-3-Roots/5013202727",
+          "baseWidth": 24,
+          "baseHeight": 24,
+          "zone":"3-8",
           "footprint": [
             1,
             1
@@ -272,7 +308,10 @@
           "id": "peony_sarah_bernhardt",
           "name": "芍药 Sarah Bernhardt",
           "icon": "/assets/plants/peony_sarah_bernhardt/icon.png",
-          "baseHeight": 90,
+          "link":"https://www.lowes.com/pd/Van-Zyverden-Pink-Peony-Sarah-Bernhardt-Bulbs-Bagged-3-Count/1000527295",
+          "baseHeight": 36,
+          "baseWidth":36,
+          "zone":"3-8",
           "footprint": [
             1,
             1
@@ -283,7 +322,7 @@
             "多年生"
           ],
           "sun": "partial",
-          "water": "medium",
+          "water": "twice",
           "bloomSeasons": [
             "spring",
             "summer"
@@ -300,7 +339,9 @@
           "id": "panicum_northwind",
           "name": "柳枝稷 Northwind",
           "icon": "/assets/plants/panicum_northwind/icon.png",
-          "baseHeight": 120,
+          "link":"https://www.lowes.com/pd/Spring-Hill-Nurseries-Northwinds-Panicum-Dormant-Ornamental-Grass-in-Bareroot/5013366533",
+          "baseHeight": 72,
+          "baseWidth":48,
           "renderScale": 0.9,
           "footprint": [
             1,
@@ -323,8 +364,11 @@
           "id": "schizachyrium_little_bluestem",
           "name": "小须芒草 Little Bluestem",
           "icon": "/assets/plants/schizachyrium_little_bluestem/icon.png",
-          "baseHeight": 100,
+          "link":"https://www.greatgardenplants.com/products/twilight-zone-little-bluestem-grass?variant=42917845106855&tw_source=google&tw_adid=&tw_campaign=18056497623&tw_kwdid=&gad_source=1&gad_campaignid=17336235066&gbraid=0AAAAAD-Q5OBOCod13LcLiu1O0Hb-yTKRq&gclid=Cj0KCQiAk6rNBhCxARIsAN5mQLuk6U-04dJjg_SCafnKmjvmjy2Ltk_hihkcIhi8UmIxKD-Q9JwXTCsaAsTCEALw_wcB",
+          "baseHeight": 60,
+          "baseWidth":48,
           "renderScale": 1.55,
+          "zone":"3-9",
           "footprint": [
             1,
             1

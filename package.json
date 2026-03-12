@@ -9,7 +9,8 @@
     "scrape:homedepot": "node scripts/scrape-homedepot-playwright.mjs",
     "plants:render": "node scripts/render-plant-assets.mjs",
     "plants:init-raw": "powershell -ExecutionPolicy Bypass -File scripts/init-raw-plants.ps1",
-    "plants:init-raw:library": "powershell -ExecutionPolicy Bypass -File scripts/init-raw-plants-from-library.ps1"
+    "plants:init-raw:library": "powershell -ExecutionPolicy Bypass -File scripts/init-raw-plants-from-library.ps1",
+    "plants:pad-width": "node scripts/pad-plant-width.mjs"
   },
   "dependencies": {
     "pixi": "^0.3.1",

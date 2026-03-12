@@ -4,6 +4,7 @@ export type PlantVariant = {
   id: string;
   name: string;
   icon: string;
+  link?: string;
   baseHeight: number;
   footprint?: [number, number];
   renderScale?: number;

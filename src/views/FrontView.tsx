@@ -1,18 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 import type { GardenState } from "../store/garden";
 
-// ===== 你的常量 =====
+// 核心布局常量
 const BASE_X = 140;
 const BASE_Y = 120;
 const COL_GAP = 110;
 const DEFAULT_ROW_GAP = 85;
+// index.json 里的 baseHeight 现在是英寸，这里换算到原先的显示尺度（近似厘米视觉）。
+const BASE_HEIGHT_UNIT_SCALE = 2;
+const SHOW_DEBUG_GRID = false;
+const SHOW_DEBUG_PLANT_BOUNDS = false;
+const ENABLE_SWAY = true;
 
-// 砖圈厚度
+// 花坛边框厚度
 const FRAME = 18;
 
-// 轻景深（你可以微调）
-const DEPTH_K = 0.1;
+// 按行做景深缩放（可调，且 depth 不超过 1）
+const DEPTH_K = 0.03;
 
 type PlantVariant = {
   id: string;
@@ -35,7 +40,7 @@ function clamp01(x: number) {
   return Math.max(0, Math.min(1, x));
 }
 function tintFromFactor(f: number) {
-  // 写实：亮度±6%，色温±3%（偏暖）
+  // 贴图着色：轻微亮度和暖色偏移
   const bright = 1 + f * 0.06;
   const warm = f * 0.03;
   const r = clamp01(bright + warm);
@@ -47,6 +52,13 @@ function tintFromFactor(f: number) {
 function fitSpriteByHeight(sprite: PIXI.Sprite, targetH: number) {
   const h = sprite.texture.height || 1;
   const scale = targetH / h;
+  sprite.scale.set(scale);
+}
+
+function fitSpriteByWidth(sprite: PIXI.Sprite, targetW: number) {
+  const h = sprite.texture.width || 1;
+  const scale = targetW / h;
+  console.log(h,scale)
   sprite.scale.set(scale);
 }
 
@@ -72,22 +84,25 @@ function isAnchorCell(
 }
 
 function footprintCenterBottom(r: number, c: number, fp: [number, number], rowGap: number) {
-  const seed=r * 1000 + c * 13;
-  const [h, w] = fp;
-  const x0 = BASE_X + (c+seededRandom(seed)/4 )* COL_GAP;
-  const y0 = BASE_Y + (r-seededRandom(seed)/4) * rowGap;
+  const [, w] = fp;
+  const seed = r * 1009 + c * 9173 + w * 37;
+  const jitterX = (seededRandom(seed) - 0.5) * COL_GAP * 0.18;
+  const jitterY = (seededRandom(seed + 1) - 0.5) * rowGap * 0.12;
+  const x0 = BASE_X + c * COL_GAP + jitterX;
+  const y0 = BASE_Y + (r + 1) * rowGap + jitterY;
+
   return {
     cx: x0 + (w * COL_GAP) / 2,
-    by: y0 + h * rowGap,
+    by: y0,
   };
 }
 
 async function loadPlantTexture(plantId: string, season: string) {
-  // 你现在用 season 做文件名：spring/summer/autumn/winter
+  // 季节名直接作为文件名：spring/summer/autumn/winter
   return await PIXI.Assets.load(`/assets/plants/${plantId}/${season}.png`);
 }
 function drawBrickFrameEdges(
-  layer: PIXI.Container,   // 建议单独用 frameLayer / midLayer
+  layer: PIXI.Container,   // 建议传入独立的边框图层
   gridW: number,
   gridH: number,
   BASE_X: number,
@@ -99,23 +114,23 @@ function drawBrickFrameEdges(
 
   const g = new PIXI.Graphics();
 
-  // Top
+  // 上边
   g.rect(BASE_X - thickness, BASE_Y - thickness, gridW + thickness * 2, thickness)
     .fill({ color: BRICK });
 
-  // Bottom
+  // 下边
   g.rect(BASE_X - thickness, BASE_Y + gridH, gridW + thickness * 2, thickness)
     .fill({ color: BRICK });
 
-  // Left
+  // 左边
   g.rect(BASE_X - thickness, BASE_Y, thickness, gridH)
     .fill({ color: BRICK });
 
-  // Right
+  // 右边
   g.rect(BASE_X + gridW, BASE_Y, thickness, gridH)
     .fill({ color: BRICK });
 
-  // 描边（可选，增强立体感）
+  // 可选描边，增强立体感
   g.stroke({ width: 2, color: BRICK_DARK, alpha: 0.6 });
 
   layer.addChild(g);
@@ -124,48 +139,73 @@ function drawBrickFrameEdges(
 
 
 async function drawMulchPerCell(layer: PIXI.Container, garden: GardenState, rowGap: number) {
-  const tex = await PIXI.Assets.load("/assets/backgrounds/mulch2.png");
+  const tex = await PIXI.Assets.load("/assets/backgrounds/mulch4.png");
+  const gridW = garden.cols * COL_GAP;
+  const gridH = garden.rows * rowGap;
+  const seed = garden.rows * 10007 + garden.cols * 97;
+  const inset = 2;
 
-  for (let r = 0; r < garden.rows; r++) {
-    for (let c = 0; c < garden.cols; c++) {
-      const tile = new PIXI.TilingSprite({
-        texture: tex,
-        width: COL_GAP,
-        height: rowGap,
-      });
-      tile.tileScale.x = COL_GAP / tex.width;
-      tile.tileScale.y = rowGap / tex.height;
+  // 采样区域内缩，避免取到贴图边缘的白边/透明边
+  const safeTexture =
+    tex.width > inset * 2 && tex.height > inset * 2
+      ? new PIXI.Texture({
+          source: tex.source,
+          frame: new PIXI.Rectangle(
+            inset,
+            inset,
+            tex.width - inset * 2,
+            tex.height - inset * 2
+          ),
+        })
+      : tex;
 
-      tile.position.set(BASE_X + c * COL_GAP, BASE_Y + r * rowGap);
+  // 用单张大平铺，避免每格独立贴图造成的白缝
+  const tile = new PIXI.TilingSprite({
+    texture: safeTexture,
+    width: gridW + 2,
+    height: gridH + 2,
+  });
+  tile.tileScale.x = COL_GAP / safeTexture.width;
+  tile.tileScale.y = rowGap / safeTexture.height;
+  tile.position.set(Math.floor(BASE_X) - 1, Math.floor(BASE_Y) - 1);
+  tile.tilePosition.set(
+    -Math.floor(seededRandom(seed + 2) * safeTexture.width),
+    -Math.floor(seededRandom(seed + 3) * safeTexture.height)
+  );
+  tile.tint = tintFromFactor((seededRandom(seed + 4) - 0.5) * 2);
+  tile.alpha = 1;
+  tile.zIndex = 0;
+  tile.roundPixels = true;
 
-      const seed = r * 10007 + c * 97;
-
-      // 纹理取样偏移：去重复感最有效
-      const offX = Math.floor(seededRandom(seed + 2) * tex.width);
-      const offY = Math.floor(seededRandom(seed + 3) * tex.height);
-      tile.tilePosition.set(-offX, -offY);
-
-      // 轻微缩放/旋转（非常克制）
-      
-
-      // 轻微色差（写实）
-      const f = (seededRandom(seed + 4) - 0.5) * 2;
-      tile.tint = tintFromFactor(f);
-
-      tile.alpha = 0.92 + seededRandom(seed + 5) * 0.08;
-
-      tile.zIndex = 0;
-      layer.addChild(tile);
-    }
-  }
+  // 硬裁剪到花坛矩形，消除抗锯齿边缘渗色
+  const mask = new PIXI.Graphics()
+    .rect(Math.floor(BASE_X), Math.floor(BASE_Y), Math.floor(gridW), Math.floor(gridH))
+    .fill({ color: 0xffffff });
+  mask.zIndex = 0;
+  layer.addChild(mask);
+  tile.mask = mask;
+  layer.addChild(tile);
 }
-
 function addPaperOverlay(scene: PIXI.Container, w: number, h: number) {
   const overlay = new PIXI.Graphics()
     .rect(0, 0, w, h)
-    .fill({ color: 0xfff7e8, alpha: 0.10 }); // 暖纸感
+    .fill({ color: 0xfff7e8, alpha: 0.10 }); // 暖色纸张质感叠加
   overlay.zIndex = 999;
   scene.addChild(overlay);
+}
+
+function drawDebugGrid(layer: PIXI.Container, rows: number, cols: number, rowGap: number) {
+  const g = new PIXI.Graphics();
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      g.rect(BASE_X + c * COL_GAP, BASE_Y + r * rowGap, COL_GAP, rowGap).stroke({
+        color: 0xffffff,
+        width: 1,
+        alpha: 0.78,
+      });
+    }
+  }
+  layer.addChild(g);
 }
 
 export function FrontView({
@@ -181,7 +221,7 @@ export function FrontView({
 
   const [variantMap, setVariantMap] = useState<Map<string, PlantVariant>>(new Map());
 
-  // 读取 catalog（含 footprint）
+  // 读取植物目录（包含 footprint 元数据）
   useEffect(() => {
     fetch("/assets/plants/index.json")
       .then((r) => r.json())
@@ -194,7 +234,7 @@ export function FrontView({
       });
   }, []);
 
-  // init Pixi
+  // 初始化 Pixi
   useEffect(() => {
     if (!mountRef.current) return;
 
@@ -236,7 +276,7 @@ export function FrontView({
     };
   }, []);
 
-  // render
+  // 渲染
   useEffect(() => {
     const app = appRef.current;
     const scene = sceneRef.current;
@@ -249,33 +289,38 @@ export function FrontView({
     (async () => {
       scene.removeChildren();
 
-      // grid 区域大小（以 row/col 间距定义）
+      // 网格尺寸
       const gridW = garden.cols * COL_GAP;
       const gridH = garden.rows * rowGap;
 
-      // 画布大小：给一点边距，避免顶到边缘
+      // 画布尺寸（带外边距）
       const canvasW = BASE_X + gridW + 140;
       const canvasH = BASE_Y + gridW + 140;
       app.renderer.resize(canvasW, canvasH);
 
-      // 分层
+      // 分层渲染
       const bgLayer = new PIXI.Container();
       const frameLayer = new PIXI.Container();
+      const debugGridLayer = new PIXI.Container();
       const plantLayer = new PIXI.Container();
       bgLayer.zIndex = 0;
       frameLayer.zIndex=5;
+      debugGridLayer.zIndex = 6;
       plantLayer.zIndex = 10;
-      scene.addChild(frameLayer,bgLayer, plantLayer);
+      scene.addChild(frameLayer, bgLayer, debugGridLayer, plantLayer);
       
 
-      // 砖圈
+      // 砖框
      
       drawBrickFrameEdges(frameLayer, gridW, gridH, BASE_X, BASE_Y, 18); 
 
-      // 每格 mulch（写实）
+      // 覆盖物底层（mulch）
       await drawMulchPerCell(bgLayer, garden, rowGap);
+      if (SHOW_DEBUG_GRID) {
+        drawDebugGrid(debugGridLayer, garden.rows, garden.cols, rowGap);
+      }
 
-      // 画植物（含 footprint 去重 + 跨格居中）
+      // 绘制植物
       for (const cell of garden.cells) {
         const plantId = cell.plant;
         if (!plantId || plantId=='empty') continue;
@@ -292,46 +337,59 @@ export function FrontView({
 
         const sprite = new PIXI.Sprite(tex);
         sprite.anchor.set(0.5, 1);
-
         const { cx, by } = footprintCenterBottom(cell.row, cell.col, fp, rowGap);
         sprite.position.set(cx, by);
 
-        // 阴影（椭圆，写实又轻）
+        // 轻量地面阴影
         const shadow = new PIXI.Graphics()
           .ellipse(cx, by - 10, 20 + fp[1] * 6, 6 + fp[0] * 1.5)
           .fill({ color: 0x000000, alpha: 0.12 });
 
-        // size + depth
-        fitSpriteByHeight(sprite, baseHeight * renderScale);
-        const depth = 1 + cell.row * DEPTH_K;
+        // 尺寸 + 景深
+        fitSpriteByWidth(sprite, COL_GAP * fp[1]);
+        //fitSpriteByHeight(sprite, baseHeight * renderScale * BASE_HEIGHT_UNIT_SCALE);
+        const maxRow = Math.max(0, garden.rows - 1);
+        const rowDistanceToBack = maxRow - cell.row;
+        const depth = Math.max(0.55, 1 - rowDistanceToBack * DEPTH_K);
         sprite.scale.set(sprite.scale.x * depth, sprite.scale.y * depth);
 
-        // zIndex 用“底边行”更自然遮挡
-        const bottomRow = cell.row + fp[0] - 1;
-        shadow.zIndex = 20 + bottomRow * 100 + cell.col - 1;
-        sprite.zIndex = 20 + bottomRow * 100 + cell.col;
+        // 按实际落点的 y 排序，和随机偏移后的前后关系保持一致
+        const zBase = Math.round(by * 100);
+        shadow.zIndex = zBase;
+        sprite.zIndex = zBase + 1;
 
         plantLayer.addChild(shadow);
         plantLayer.addChild(sprite);
 
-        // 轻摆动（治愈感）：非常克制
+        // 可选轻微摇摆参数
         const seed = cell.row * 1000 + cell.col * 13;
-        const amp = 0.012 + seededRandom(seed) * 0.008; // 小幅度
+        const amp = 0.012 + seededRandom(seed) * 0.008; // 小振幅
         const speed = 0.5 + seededRandom(seed + 1) * 0.35;
         const phase = seededRandom(seed + 2) * Math.PI * 2;
         const baseRot = (seededRandom(seed + 3) - 0.5) * 0.01;
 
-        // 以根部附近摆动
-        sprite.pivot.y = sprite.height * 0.9;
+        // 保持 anchor 对齐到底边基线。
+        // 后续如果重开摇摆，用 anchor(0.5, 1) 就能实现底部支点感。
 
-        // ticker：给每个 sprite 绑定一个轻摆动
-        app.ticker.add(() => {
-          const t = app.ticker.lastTime / 1000;
-          sprite.rotation = baseRot + Math.sin(t * speed + phase) * amp;
-        });
+        if (SHOW_DEBUG_PLANT_BOUNDS) {
+          const localBox = new PIXI.Graphics()
+            .rect(-sprite.width / 2, -sprite.height, sprite.width, sprite.height)
+            .stroke({ color: 0xffffff, width: 1, alpha: 0.9 });
+          sprite.addChild(localBox);
+        }
+
+        // ticker：可选轻微摇摆
+        if (ENABLE_SWAY) {
+          app.ticker.add(() => {
+            const t = app.ticker.lastTime / 1000;
+            sprite.rotation = baseRot + Math.sin(t * speed + phase) * amp;
+          });
+        } else {
+          sprite.rotation = 0;
+        }
       }
 
-      // 暖纸 overlay（整体旅行青蛙氛围）
+      // 全局纸张色调叠加
       addPaperOverlay(scene, canvasW, canvasH);
 
       scene.sortChildren();
@@ -344,3 +402,4 @@ export function FrontView({
 
   return <div ref={mountRef} />;
 }
+

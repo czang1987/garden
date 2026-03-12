@@ -4,6 +4,7 @@ import { resizeGarden,GardenState,printGarden } from "../store/garden";
 import PlantCatalog from "../components/PlantCatalog";
 import type { PlantCatalogData, PlantCategory, PlantVariant } from "../type/plants";
 import { generateAutoLayout, scoreLayout } from "../utils/layoutEngine";
+import { buildLayoutFile, formatLayoutFileAsReadableText, parseLayoutText } from "../utils/layoutIo";
 
 
 
@@ -44,6 +45,7 @@ export default function TopView({
 }) {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const appRef = useRef<PIXI.Application | null>(null);
   const gridLayerRef = useRef<PIXI.Container | null>(null);
   const drawVersionRef = useRef(0);
@@ -164,6 +166,43 @@ function disabledReason(v: PlantVariant) {
     const next = generateAutoLayout(garden, allVariants, { targetCoverage: 0.62 });
     onChange(next);
     setSelectedCell(null);
+  };
+
+  const exportLayout = () => {
+    const doc = buildLayoutFile(garden, allVariants);
+    const readable = formatLayoutFileAsReadableText(doc);
+    const blob = new Blob([readable], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    a.href = url;
+    a.download = `garden-layout-${stamp}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const triggerImport = () => {
+    fileInputRef.current?.click();
+  };
+
+  const onImportFile = async (e: any) => {
+    const file = e.target.files?.[0];
+    e.currentTarget.value = "";
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const { garden: next, warnings } = parseLayoutText(text, allVariants, garden.season);
+      onChange(next);
+      setSelectedCell(null);
+      if (warnings.length > 0) {
+        alert(`Imported with warnings:\n- ${warnings.join("\n- ")}`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Failed to import layout file: ${msg}`);
+    }
   };
 
   const [selectedCell, setSelectedCell] = useState<{ r: number; c: number } | null>(null);
@@ -375,6 +414,15 @@ return (
       <button onClick={autoGenerate} disabled={allVariants.length === 0}>
         自动生成布局
       </button>
+      <button onClick={exportLayout}>导出布局文件</button>
+      <button onClick={triggerImport}>导入布局文件</button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".txt,text/plain"
+        onChange={onImportFile}
+        style={{ display: "none" }}
+      />
       <div
         style={{
           marginLeft: 12,
