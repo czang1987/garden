@@ -1,0 +1,15 @@
+﻿categoryId,categoryName,plantId,plantName,baseHeight,baseWidth,springWidth,springHeight,summerWidth,summerHeight,autumnWidth,autumnHeight,winterWidth,winterHeight
+rose,玫瑰,rose_knockout_red,Knock Out（红）,48,48,839,749,600,527,841,738,839,749
+rose,玫瑰,rose_iceberg_white,Iceberg（白）,48,36,800,800,800,800,800,800,800,800
+hydrangea,绣球,hydrangea_blue_bush,大花绣球（蓝）,72,72,907,656,800,673,926,681,895,665
+hydrangea,绣球,hydrangea_paniculata_limelight,圆锥绣球 Limelight,84,84,882,799,939,822,935,840,943,831
+tulip,郁金香,tulip_red,红郁金香,10,6,1024,1536,796,732,787,599,787,599
+lavender,薰衣草,lavender_english,英格兰薰衣草,30,20,1098,761,1088,801,1088,801,1098,761
+shrubs,灌木,boxwood_green_mountain,黄杨 Green Mountain,60,60,904,1106,904,1106,904,1106,904,1106
+shrubs,灌木,arborvitae_emerald_green,侧柏 Emerald Green,180,48,666,1327,666,1327,666,1327,666,1327
+ny_perennials,多年生,echinacea_purple_coneflower,紫锥花,36,18,866,940,881,911,881,911,936,856
+ny_perennials,多年生,rudbeckia_black_eyed_susan,黑心金光菊,24,12,800,800,800,800,800,800,800,800
+ny_perennials,多年生,hosta_frances_williams,玉簪 Frances Williams,24,24,1016,589,1006,618,1014,601,1003,436
+ny_perennials,多年生,peony_sarah_bernhardt,芍药 Sarah Bernhardt,36,36,800,800,800,800,800,800,800,800
+ny_grasses,观赏草,panicum_northwind,柳枝稷 Northwind,72,48,1152,1536,955,987,977,857,977,857
+ny_grasses,观赏草,schizachyrium_little_bluestem,小须芒草 Little Bluestem,60,48,1024,1536,1024,1536,1024,1536,1024,1536

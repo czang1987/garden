@@ -7,3 +7,14 @@ dist
 *.zip
 scripts/raw-plants/
 data/
+frontview.png
+public/assets/plants/**/tmp_padded/
+public/assets/plants/**/icon0.png
+public/assets/plants/**/spring0.png
+public/assets/plants/**/summer0.png
+public/assets/plants/**/autumn0.png
+public/assets/plants/**/winter0.png
+public/assets/plants/**/*_tmp.png
+public/assets/plants/**/ChatGPT Image *.png
+public/assets/plants/**/garden-layout-*.txt
+public/assets/plants/**/* - 副本.png

@@ -1,0 +1,6 @@
+# Home Depot listing/category/search URLs. One URL per line.
+# Example:
+# https://www.homedepot.com/b/Outdoors-Garden-Center-Plants-Garden-Flowers/N-5yc1vZbx78
+# https://www.homedepot.com/b/Outdoors-Garden-Center-Plants-Perennials/N-5yc1vZc8sm
+
+https://www.homedepot.com/b/Outdoors-Garden-Center-Outdoor-Plants-Garden-Flowers-Perennials/N-5yc1vZc8ryZ1z1yold
