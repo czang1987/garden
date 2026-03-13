@@ -4,7 +4,7 @@ import { FrontView } from "./views/FrontView";
 import { createGarden, resizeGarden } from "./store/garden";
 import type { GardenState, Season } from "./store/garden";
 import type { PlantCatalogData, PlantCategory, PlantVariant } from "./type/plants";
-import { generateAutoLayout, scoreLayout } from "./utils/layoutEngine";
+import { generateAutoLayout, relativeHeightFactor, scoreLayout } from "./utils/layoutEngine";
 import { buildLayoutFile, formatLayoutFileAsReadableText, parseLayoutText } from "./utils/layoutIo";
 
 function buildLockGrid(garden: GardenState, variants: PlantVariant[]) {
@@ -189,6 +189,26 @@ export default function App() {
     }
 
     if (nextPlantId !== "empty") {
+      const placed = next.cells
+        .filter((cell) => cell.plant && cell.plant !== "empty")
+        .map((cell) => ({ r: cell.row, c: cell.col, id: cell.plant }));
+      const variantMap = new Map(allVariants.map((variant) => [variant.id, variant] as const));
+      const nextVariant = allVariants.find((variant) => variant.id === nextPlantId);
+      if (nextVariant) {
+        const placementFactor = relativeHeightFactor(
+          nextVariant,
+          selectedCell.r,
+          selectedCell.c,
+          placed,
+          variantMap
+        );
+        console.log("[manual-select] choose", {
+          row: selectedCell.r,
+          col: selectedCell.c,
+          plantId: nextPlantId,
+          placementFactor: Number(placementFactor.toFixed(4)),
+        });
+      }
       target.plant = nextPlantId;
     }
 
@@ -205,6 +225,15 @@ export default function App() {
 
   function autoGenerate() {
     setGarden((prev) => generateAutoLayout(prev, allVariants, { targetCoverage: 0.62 }));
+    setEditMode(false);
+    setSelectedCell(null);
+  }
+
+  function clearAllPlants() {
+    setGarden((prev) => ({
+      ...prev,
+      cells: prev.cells.map((cell) => ({ ...cell, plant: "empty" })),
+    }));
     setEditMode(false);
     setSelectedCell(null);
   }
@@ -293,6 +322,7 @@ export default function App() {
         <button onClick={autoGenerate} disabled={allVariants.length === 0}>
           自动生成布局
         </button>
+        <button onClick={clearAllPlants}>清空全部植物</button>
         <button onClick={exportLayout}>导出布局文件</button>
         <button onClick={triggerImport}>导入布局文件</button>
         <input

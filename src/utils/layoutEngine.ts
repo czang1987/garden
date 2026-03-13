@@ -1,4 +1,4 @@
-import type { GardenState, Season } from "../store/garden";
+import type { GardenState } from "../store/garden";
 import type { PlantVariant } from "../type/plants";
 
 type ScoreBreakdown = {
@@ -43,22 +43,104 @@ function makeShuffled<T>(arr: T[], seed: number): T[] {
   return out;
 }
 
-function pickWeighted(variants: PlantVariant[], season: Season, seed: number) {
-  if (variants.length === 0) return null;
-  const weights = variants.map((v, i) => {
-    const bloomBoost = v.bloomSeasons?.includes(season) ? 1.25 : 1;
-    const m = v.maintenance ?? 3;
-    const maintainBoost = 1 + (5 - m) * 0.04;
-    const base = 1 + ((i % 5) * 0.03);
-    return base * bloomBoost * maintainBoost;
-  });
-  const sum = weights.reduce((a, b) => a + b, 0);
-  let p = seededRandom(seed) * sum;
-  for (let i = 0; i < variants.length; i++) {
-    p -= weights[i];
-    if (p <= 0) return variants[i];
+export function relativeHeightFactor(
+  candidate: PlantVariant,
+  candidateRow: number,
+  candidateCol: number,
+  placed: Placed[],
+  variantMap: Map<string, PlantVariant>
+) {
+  let factor = 1;
+
+  for (const existing of placed) {
+    const existingVariant = variantMap.get(existing.id);
+    if (!existingVariant) continue;
+
+    const existingFp = (existingVariant.footprint ?? [1, 1]) as [number, number];
+    const existingRowStart = existing.r;
+    const existingRowEnd = existing.r + existingFp[0] - 1;
+    const existingColStart = existing.c;
+    const existingColEnd = existing.c + existingFp[1] - 1;
+
+    let deltaRow = 0;
+    if (candidateRow < existingRowStart) deltaRow = candidateRow - existingRowStart;
+    else if (candidateRow > existingRowEnd) deltaRow = candidateRow - existingRowEnd;
+
+    let deltaCol = 0;
+    if (candidateCol < existingColStart) deltaCol = existingColStart - candidateCol;
+    else if (candidateCol > existingColEnd) deltaCol = candidateCol - existingColEnd;
+
+    const rowDistance = Math.abs(deltaRow);
+    if (rowDistance === 0 && deltaCol === 0) continue;
+
+    const distanceWeight = 1 / (rowDistance + deltaCol);
+    const heightDelta = candidate.baseHeight - existingVariant.baseHeight;
+
+    // New plant is in front of an existing plant: front plants should not be taller.
+    if (deltaRow > 0 && heightDelta > 0) {
+      const severity = Math.min(1, (heightDelta / Math.max(existingVariant.baseHeight, 1)) * 1.2);
+      const colWeight = deltaCol === 0 ? 1 : 1 / (deltaCol + 1);
+      factor *= Math.max(0, 1 - severity * distanceWeight * colWeight * 5);
+      continue;
+    }
+
+    // New plant is behind an existing plant: back plants should not be shorter.
+    if (deltaRow < 0 && heightDelta < 0) {
+      const severity = Math.min(1, (Math.abs(heightDelta) / Math.max(existingVariant.baseHeight, 1)) * 1.2);
+      const colWeight = deltaCol === 0 ? 1 : 1 / (deltaCol + 1);
+      factor *= Math.max(0.05, 1 - severity * distanceWeight * colWeight * 5);
+      console.log("severity",severity,"deltaCol",deltaCol,"deltaHeight",Math.abs(heightDelta))
+    }
   }
-  return variants[variants.length - 1];
+
+  return factor;
+}
+
+function pickWeighted(
+  variants: PlantVariant[],
+  seed: number,
+  candidateRow: number,
+  candidateCol: number,
+  placed: Placed[],
+  variantMap: Map<string, PlantVariant>
+) {
+  if (variants.length === 0) return null;
+  const weightedCandidates = variants.map((v, i) => {
+    const placementFactor = relativeHeightFactor(v, candidateRow, candidateCol, placed, variantMap);
+    const base = 1 + ((i % 5) * 0.03);
+    return {
+      variant: v,
+      placementFactor,
+      weight: base * placementFactor,
+    };
+  });
+  const sum = weightedCandidates.reduce((a, b) => a + b.weight, 0);
+  if (sum <= 0) return variants[variants.length - 1] ?? null;
+  let p = seededRandom(seed) * sum;
+  for (let i = 0; i < weightedCandidates.length; i++) {
+    p -= weightedCandidates[i].weight;
+    if (p <= 0) {
+      const chosen = weightedCandidates[i];
+      console.log("[auto-layout] choose", {
+        row: candidateRow,
+        col: candidateCol,
+        plantId: chosen.variant.id,
+        placementFactor: Number(chosen.placementFactor.toFixed(4)),
+        weight: Number(chosen.weight.toFixed(4)),
+      });
+      return chosen.variant;
+    }
+  }
+  const fallback = weightedCandidates[weightedCandidates.length - 1];
+  console.log("[auto-layout] choose", {
+    row: candidateRow,
+    col: candidateCol,
+    plantId: fallback.variant.id,
+    placementFactor: Number(fallback.placementFactor.toFixed(4)),
+    weight: Number(fallback.weight.toFixed(4)),
+    fallback: true,
+  });
+  return fallback.variant;
 }
 
 function canPlace(
@@ -107,9 +189,11 @@ export function generateAutoLayout(
 
   const next: GardenState = {
     ...base,
-    cells: base.cells.map((c) => ({ ...c, plant: "empty" })),
+    cells: base.cells.map((c) => ({ ...c })),
   };
   const occupied = Array.from({ length: rows }, () => Array(cols).fill(false));
+  const variantMap = new Map<string, PlantVariant>();
+  for (const variant of variants) variantMap.set(variant.id, variant);
 
   const positions: Array<{ r: number; c: number }> = [];
   for (let r = 0; r < rows; r++) {
@@ -119,12 +203,22 @@ export function generateAutoLayout(
 
   const placed: Placed[] = [];
   let used = 0;
+
+  for (const cell of next.cells) {
+    if (!cell.plant || cell.plant === "empty") continue;
+    const fp = (variantMap.get(cell.plant)?.footprint ?? [1, 1]) as [number, number];
+    if (!canPlace(occupied, rows, cols, cell.row, cell.col, fp)) continue;
+    markOccupied(occupied, cell.row, cell.col, fp);
+    used += fp[0] * fp[1];
+    placed.push({ r: cell.row, c: cell.col, id: cell.plant });
+  }
+
   let idx = 0;
   while (idx < shuffled.length && used < targetOccupiedCells) {
     const { r, c } = shuffled[idx++];
     if (occupied[r][c]) continue;
 
-    const chosen = pickWeighted(variants, base.season, seed + r * 131 + c * 17);
+    const chosen = pickWeighted(variants, seed + r * 131 + c * 17, r, c, placed, variantMap);
     if (!chosen) break;
     const fp = (chosen.footprint ?? [1, 1]) as [number, number];
 

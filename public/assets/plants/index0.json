@@ -7,12 +7,7 @@
       "footprint": [1, 2]
       
     },
-    {
-      "name": "rose",
-      "icon": "/assets/plants/rose/icon.png",
-      "baseHeight":80,
-      "footprint": [1, 1]
-    },
+    
     {
       "name": "tulip",
       "icon": "/assets/plants/tulip/icon.png",
@@ -22,6 +17,12 @@
      {
       "name": "lavender",
       "icon": "/assets/plants/lavender/icon.png",
+      "baseHeight":80,
+      "footprint": [1, 1]
+    },
+    {
+      "name": "rose",
+      "icon": "/assets/plants/rose/icon.png",
       "baseHeight":80,
       "footprint": [1, 1]
     }

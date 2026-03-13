@@ -23,6 +23,11 @@ type PlantCatalogData = {
   categories: { id: string; name: string; variants: PlantVariant[] }[];
 };
 
+type LayoutMetrics = {
+  baseY: number;
+  canvasH: number;
+};
+
 function seededRandom(seed: number) {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
@@ -196,12 +201,17 @@ export function FrontView({
   const [appReady, setAppReady] = useState(false);
 
   const [variantMap, setVariantMap] = useState<Map<string, PlantVariant>>(new Map());
+  const defaultBaseY = Math.max(80, Math.round(colGap * 0.9));
+  const [layoutMetrics, setLayoutMetrics] = useState<LayoutMetrics>(() => ({
+    baseY: defaultBaseY,
+    canvasH: defaultBaseY + garden.rows * rowGap + Math.max(140, Math.round(colGap * 1.25)),
+  }));
 
   const gridW = garden.cols * colGap;
   const gridH = garden.rows * rowGap;
   const baseX = Math.max(FRAME + 24, Math.floor((canvasWidth - gridW) / 2));
-  const baseY = Math.max(80, Math.round(colGap * 0.9));
-  const canvasH = baseY + gridH + Math.max(140, Math.round(colGap * 1.25));
+  const baseY = layoutMetrics.baseY;
+  const canvasH = layoutMetrics.canvasH;
 
   useEffect(() => {
     fetch("/assets/plants/index.json")
@@ -214,6 +224,48 @@ export function FrontView({
         setVariantMap(map);
       });
   }, []);
+
+  useEffect(() => {
+    let canceled = false;
+
+    (async () => {
+      const fallbackBaseY = Math.max(80, Math.round(colGap * 0.9));
+      let requiredBaseY = fallbackBaseY;
+      const maxRow = Math.max(0, garden.rows - 1);
+
+      for (const cell of garden.cells) {
+        if (!cell.plant || cell.plant === "empty") continue;
+        const meta = variantMap.get(cell.plant);
+        if (!meta) continue;
+
+        const fp = (meta.footprint ?? [1, 1]) as [number, number];
+        const renderScale = meta.renderScale ?? 1;
+        const tex = await loadPlantTexture(cell.plant, garden.season);
+        if (canceled) return;
+
+        const widthScale = (colGap * fp[1]) / Math.max(tex.width || 1, 1);
+        const rowDistanceToBack = maxRow - cell.row;
+        const depth = Math.max(0.55, 1 - rowDistanceToBack * DEPTH_K);
+        const displayedHeight = (tex.height || 1) * widthScale * renderScale * depth;
+        const minBaseYForCell = Math.ceil(displayedHeight - (cell.row + 1) * rowGap + 40);
+        requiredBaseY = Math.max(requiredBaseY, minBaseYForCell);
+      }
+
+      const nextCanvasH =
+        requiredBaseY + garden.rows * rowGap + Math.max(140, Math.round(colGap * 1.25));
+
+      if (!canceled) {
+        setLayoutMetrics((prev) => {
+          if (prev.baseY === requiredBaseY && prev.canvasH === nextCanvasH) return prev;
+          return { baseY: requiredBaseY, canvasH: nextCanvasH };
+        });
+      }
+    })();
+
+    return () => {
+      canceled = true;
+    };
+  }, [colGap, garden, rowGap, variantMap]);
 
   useEffect(() => {
     if (!mountRef.current) return;
