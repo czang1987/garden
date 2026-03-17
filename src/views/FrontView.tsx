@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 import type { GardenState } from "../store/garden";
 import { footprintCells } from "../utils/footprint";
@@ -10,7 +10,7 @@ const SHOW_DEBUG_PLANT_BOUNDS = false;
 const SHOW_DEBUG_OCCUPIED_CELLS = true;
 const ENABLE_SWAY = true;
 const FRAME = 36;
-const DEPTH_K = 0.003;
+const DEPTH_K = 0.01;
 
 type PlantVariant = {
   id: string;

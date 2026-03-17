@@ -52,6 +52,12 @@ export function relativeHeightFactor(
   variantMap: Map<string, PlantVariant>
 ) {
   let factor = 1;
+  const candidateFp = (candidate.footprint ?? [1, 1]) as [number, number];
+  const candidate_bounds=footprintBounds({r:candidateRow,c:candidateCol},candidateFp)
+  const candidateRowStart = candidate_bounds.top;
+  const candidateRowEnd = candidate_bounds.bottom;
+  const candidateColStart = candidate_bounds.left;
+  const candidateColEnd = candidate_bounds.right;
 
   for (const existing of placed) {
     const existingVariant = variantMap.get(existing.id);
@@ -65,34 +71,25 @@ export function relativeHeightFactor(
     const existingColEnd = bounds.right;
 
     let deltaRow = 0;
-    if (candidateRow < existingRowStart) deltaRow = candidateRow - existingRowStart;
-    else if (candidateRow > existingRowEnd) deltaRow = candidateRow - existingRowEnd;
+    if (candidateRowEnd < existingRowStart) deltaRow = candidateRowEnd - existingRowStart;
+    else if (candidateRowStart > existingRowEnd) deltaRow = candidateRowStart - existingRowEnd;
 
     let deltaCol = 0;
-    if (candidateCol < existingColStart) deltaCol = existingColStart - candidateCol;
-    else if (candidateCol > existingColEnd) deltaCol = candidateCol - existingColEnd;
+    if (candidateColEnd < existingColStart) deltaCol = existingColStart - candidateColEnd;
+    else if (candidateColStart > existingColEnd) deltaCol = candidateColStart - existingColEnd;
 
     const rowDistance = Math.abs(deltaRow);
     if (rowDistance === 0 && deltaCol === 0) continue;
 
     const distanceWeight = 1 / (rowDistance + deltaCol);
     const heightDelta = candidate.baseHeight - existingVariant.baseHeight;
-
-    // New plant is in front of an existing plant: front plants should not be taller.
-    if (deltaRow > 0 && heightDelta > 0) {
-      const severity = Math.min(1, (heightDelta / Math.max(existingVariant.baseHeight, 1)) * 1.2);
-      const colWeight = deltaCol === 0 ? 1 : 1 / (deltaCol + 1);
-      factor *= Math.max(0, 1 - severity * distanceWeight * colWeight * 5);
-      continue;
-    }
-
-    // New plant is behind an existing plant: back plants should not be shorter.
-    if (deltaRow < 0 && heightDelta < 0) {
+    if(deltaRow*heightDelta>=0){
       const severity = Math.min(1, (Math.abs(heightDelta) / Math.max(existingVariant.baseHeight, 1)) * 1.2);
-      const colWeight = deltaCol === 0 ? 1 : 1 / (deltaCol + 1);
+      const colWeight = deltaCol === 0 ? 1 : 1 / (Math.abs(deltaCol) + 1);
       factor *= Math.max(0.05, 1 - severity * distanceWeight * colWeight * 5);
       console.log("severity",severity,"deltaCol",deltaCol,"deltaHeight",Math.abs(heightDelta))
     }
+    
   }
 
   return factor;
