@@ -177,6 +177,29 @@
       "id": "shrubs",
       "name": "灌木",
       "variants": [
+<<<<<<< HEAD
+=======
+         {
+          "id": "dwarf_weigela",
+          "name": "锦带花 Dwarf Weigela",
+          "icon": "/assets/plants/dwarf_weigela/summer.png",
+          "link":"https://www.lowes.com/pd/Proven-Winners-2-0-Gallon-Sonic-Bloom-Pink-Weigela-florida-Brokrasopin-PP24572/5015993967",
+          "zone":"4-8",
+          "baseHeight": 48,
+          "baseWidth": 48,
+          "footprint": [
+            1,
+            1
+          ],
+          "tags": [
+            
+          ],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": ["summer","autumn"],
+          "maintenance": 1
+        },
+>>>>>>> 970739c78b16030d007a01f33fe901550bd1ff62
         {
           "id": "boxwood_green_mountain",
           "name": "黄杨 Green Mountain",

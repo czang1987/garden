@@ -10,7 +10,9 @@ const SHOW_DEBUG_PLANT_BOUNDS = false;
 const SHOW_DEBUG_OCCUPIED_CELLS = true;
 const ENABLE_SWAY = true;
 const FRAME = 36;
+
 const DEPTH_K = 0.01;
+
 
 type PlantVariant = {
   id: string;
