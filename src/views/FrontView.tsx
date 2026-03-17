@@ -7,7 +7,7 @@ const BASE_HEIGHT_UNIT_SCALE = 2;
 const SHOW_DEBUG_GRID = false;
 const SHOW_DEBUG_PLANT_BOUNDS = false;
 const ENABLE_SWAY = true;
-const FRAME = 18;
+const FRAME = 36;
 const DEPTH_K = 0.03;
 
 type PlantVariant = {
@@ -78,25 +78,89 @@ async function loadPlantTexture(plantId: string, season: string) {
   return await PIXI.Assets.load(`/assets/plants/${plantId}/${season}.png`);
 }
 
-function drawBrickFrameEdges(
+async function drawBrickFrameEdges(
   layer: PIXI.Container,
   gridW: number,
   gridH: number,
   baseX: number,
   baseY: number,
+  rowGap: number,
+  colGap: number,
   thickness = 18
 ) {
-  const brick = 0xb16c4a;
   const brickDark = 0x8e4f35;
-  const g = new PIXI.Graphics();
+  const brickFill = 0xb16c4a;
+  let tex: PIXI.Texture | null = null;
 
-  g.rect(baseX - thickness, baseY - thickness, gridW + thickness * 2, thickness).fill({ color: brick });
-  g.rect(baseX - thickness, baseY + gridH, gridW + thickness * 2, thickness).fill({ color: brick });
-  g.rect(baseX - thickness, baseY, thickness, gridH).fill({ color: brick });
-  g.rect(baseX + gridW, baseY, thickness, gridH).fill({ color: brick });
-  g.stroke({ width: 2, color: brickDark, alpha: 0.6 });
+  try {
+    tex = await PIXI.Assets.load("/assets/backgrounds/brick.png");
+  } catch {
+    try {
+      tex = await PIXI.Assets.load("/assets/backgrounds/brick_v.png");
+    } catch {
+      tex = null;
+    }
+  }
 
-  layer.addChild(g);
+  if (!tex) {
+    const g = new PIXI.Graphics();
+    g.rect(baseX - thickness, baseY - thickness, gridW + thickness * 2, thickness).fill({ color: brickFill });
+    g.rect(baseX - thickness, baseY + gridH, gridW + thickness * 2, thickness).fill({ color: brickFill });
+    g.rect(baseX - thickness, baseY, thickness, gridH).fill({ color: brickFill });
+    g.rect(baseX + gridW, baseY, thickness, gridH).fill({ color: brickFill });
+    g.rect(baseX - thickness, baseY - thickness, gridW + thickness * 2, gridH + thickness * 2).stroke({
+      width: 2,
+      color: brickDark,
+      alpha: 0.45,
+    });
+    layer.addChild(g);
+    return;
+  }
+
+  const top = new PIXI.TilingSprite({
+    texture: tex,
+    width: gridW + thickness * 2,
+    height: thickness,
+  });
+  top.position.set(baseX - thickness, baseY - thickness);
+  top.tileScale.x = colGap / Math.max(tex.width || 1, 1);
+  top.tileScale.y = thickness / Math.max(tex.height || 1, 1);
+
+  const bottom = new PIXI.TilingSprite({
+    texture: tex,
+    width: gridW + thickness * 2,
+    height: thickness,
+  });
+  bottom.position.set(baseX - thickness, baseY + gridH);
+  bottom.tileScale.x = colGap / Math.max(tex.width || 1, 1);
+  bottom.tileScale.y = thickness / Math.max(tex.height || 1, 1);
+
+  const left = new PIXI.TilingSprite({
+    texture: tex,
+    width: thickness,
+    height: gridH,
+  });
+  left.position.set(baseX - thickness, baseY);
+  left.tileScale.x = thickness / Math.max(tex.width || 1, 1);
+  left.tileScale.y = rowGap / Math.max(tex.height || 1, 1);
+
+  const right = new PIXI.TilingSprite({
+    texture: tex,
+    width: thickness,
+    height: gridH,
+  });
+  right.position.set(baseX + gridW, baseY);
+  right.tileScale.x = thickness / Math.max(tex.width || 1, 1);
+  right.tileScale.y = rowGap / Math.max(tex.height || 1, 1);
+
+  const outline = new PIXI.Graphics();
+  outline.rect(baseX - thickness, baseY - thickness, gridW + thickness * 2, gridH + thickness * 2).stroke({
+    width: 2,
+    color: brickDark,
+    alpha: 0.45,
+  });
+
+  layer.addChild(top, bottom, left, right, outline);
 }
 
 async function drawMulchPerCell(
@@ -357,7 +421,7 @@ export function FrontView({
       plantLayer.zIndex = 10;
       scene.addChild(frameLayer, bgLayer, debugGridLayer, plantLayer);
 
-      drawBrickFrameEdges(frameLayer, gridW, gridH, baseX, baseY, FRAME);
+      await drawBrickFrameEdges(frameLayer, gridW, gridH, baseX, baseY, rowGap, colGap, FRAME);
       await drawMulchPerCell(bgLayer, garden, rowGap, colGap, baseX, baseY);
 
       if (SHOW_DEBUG_GRID || showEditGrid) {
