@@ -99,14 +99,33 @@ export default function App() {
     return rr >= 0 && rr < garden.rows && cc >= 0 && cc < garden.cols;
   }
 
-  function selectedPlantFreedCells() {
-    if (!selectedCell) return new Set<string>();
-    const target = getCell(garden, selectedCell.r, selectedCell.c);
-    if (!target || !target.plant || target.plant === "empty") return new Set<string>();
+  function resolveSelectedPlantAnchor(state: GardenState) {
+    if (!selectedCell) return null;
 
-    const variant = allVariants.find((v) => v.id === target.plant);
-    const fp = (variant?.footprint ?? [1, 1]) as [number, number];
-    return new Set(footprintCells(selectedCell, fp).map((cell) => `${cell.r},${cell.c}`));
+    for (const cell of state.cells) {
+      if (!cell.plant || cell.plant === "empty") continue;
+      if (cell.row !== selectedCell.r) continue;
+      const variant = allVariants.find((v) => v.id === cell.plant);
+      const fp = (variant?.footprint ?? [1, 1]) as [number, number];
+      if (selectedCell.c < cell.col || selectedCell.c >= cell.col + fp[1]) continue;
+      return {
+        anchor: cell,
+        variant,
+        footprint: fp,
+      };
+    }
+
+    return null;
+  }
+
+  function selectedPlantFreedCells() {
+    const resolved = resolveSelectedPlantAnchor(garden);
+    if (!resolved) return new Set<string>();
+    return new Set(
+      footprintCells({ r: resolved.anchor.row, c: resolved.anchor.col }, resolved.footprint).map(
+        (cell) => `${cell.r},${cell.c}`
+      )
+    );
   }
 
   function canPlaceAtSelected(v: PlantVariant) {
@@ -139,26 +158,25 @@ export default function App() {
     if (!selectedCell) return;
 
     const next = structuredClone(garden);
+    const resolved = resolveSelectedPlantAnchor(next);
     const target = getCell(next, selectedCell.r, selectedCell.c);
-    if (!target) return;
 
     const nextPlantId = plantId ?? "empty";
-    if (target.plant === nextPlantId) {
+    if ((resolved?.anchor.plant ?? target?.plant) === nextPlantId) {
       setEditMode(false);
       setSelectedCell(null);
       return;
     }
 
-    if (target.plant !== "empty") {
-      const oldVariant = allVariants.find((v) => v.id === target.plant);
-      const oldFp = (oldVariant?.footprint ?? [1, 1]) as [number, number];
-      for (const cell of footprintCells(selectedCell, oldFp)) {
+    if (resolved?.anchor && resolved.anchor.plant !== "empty") {
+      for (const cell of footprintCells({ r: resolved.anchor.row, c: resolved.anchor.col }, resolved.footprint)) {
         const current = getCell(next, cell.r, cell.c);
         if (current) current.plant = "empty";
       }
     }
 
     if (nextPlantId !== "empty") {
+      if (!target) return;
       const placed = next.cells
         .filter((cell) => cell.plant && cell.plant !== "empty")
         .map((cell) => ({ r: cell.row, c: cell.col, id: cell.plant }));

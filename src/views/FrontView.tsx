@@ -29,6 +29,12 @@ type LayoutMetrics = {
   canvasH: number;
 };
 
+type HoverPlant = {
+  name: string;
+  x: number;
+  y: number;
+};
+
 function seededRandom(seed: number) {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
@@ -241,6 +247,26 @@ function drawDebugGrid(
   layer.addChild(g);
 }
 
+function findPlantAtCell(
+  cells: GardenState["cells"],
+  variantMap: Map<string, PlantVariant>,
+  targetRow: number,
+  targetCol: number
+) {
+  for (const cell of cells) {
+    if (!cell.plant || cell.plant === "empty") continue;
+    const meta = variantMap.get(cell.plant);
+    if (!meta) continue;
+    const fp = (meta.footprint ?? [1, 1]) as [number, number];
+    for (const occupiedCell of footprintCells({ r: cell.row, c: cell.col }, fp)) {
+      if (occupiedCell.r === targetRow && occupiedCell.c === targetCol) {
+        return meta;
+      }
+    }
+  }
+  return null;
+}
+
 function drawOccupiedCells(
   layer: PIXI.Container,
   cells: GardenState["cells"],
@@ -294,6 +320,7 @@ export function FrontView({
   const appRef = useRef<PIXI.Application | null>(null);
   const sceneRef = useRef<PIXI.Container | null>(null);
   const [appReady, setAppReady] = useState(false);
+  const [hoverPlant, setHoverPlant] = useState<HoverPlant | null>(null);
 
   const [variantMap, setVariantMap] = useState<Map<string, PlantVariant>>(new Map());
   const defaultBaseY = Math.max(80, Math.round(colGap * 0.9));
@@ -425,9 +452,49 @@ export function FrontView({
       onCellSelect?.({ r, c });
     };
 
+    const handlePointerMove = (event: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const insideGrid =
+        x >= baseX &&
+        x < baseX + garden.cols * colGap &&
+        y >= baseY &&
+        y < baseY + garden.rows * rowGap;
+
+      if (!insideGrid) {
+        setHoverPlant(null);
+        return;
+      }
+
+      const c = Math.floor((x - baseX) / colGap);
+      const r = Math.floor((y - baseY) / rowGap);
+      const plant = findPlantAtCell(garden.cells, variantMap, r, c);
+      if (!plant) {
+        setHoverPlant(null);
+        return;
+      }
+
+      setHoverPlant({
+        name: plant.name,
+        x: x + 12,
+        y: y - 12,
+      });
+    };
+
+    const handlePointerLeave = () => {
+      setHoverPlant(null);
+    };
+
     canvas.addEventListener("pointerdown", handlePointerDown);
-    return () => canvas.removeEventListener("pointerdown", handlePointerDown);
-  }, [appReady, baseX, baseY, colGap, garden.cols, garden.rows, onCanvasBackgroundClick, onCellSelect, rowGap]);
+    canvas.addEventListener("pointermove", handlePointerMove);
+    canvas.addEventListener("pointerleave", handlePointerLeave);
+    return () => {
+      canvas.removeEventListener("pointerdown", handlePointerDown);
+      canvas.removeEventListener("pointermove", handlePointerMove);
+      canvas.removeEventListener("pointerleave", handlePointerLeave);
+    };
+  }, [appReady, baseX, baseY, colGap, garden.cells, garden.cols, garden.rows, onCanvasBackgroundClick, onCellSelect, rowGap, variantMap]);
 
   useEffect(() => {
     const app = appRef.current;
@@ -531,7 +598,31 @@ export function FrontView({
     };
   }, [appReady, baseX, baseY, canvasH, canvasWidth, colGap, garden, gridH, gridW, rowGap, selectedCell, showEditGrid, variantMap]);
 
-  return <div ref={mountRef} style={{ width: canvasWidth, minHeight: canvasH }} />;
+  return (
+    <div ref={mountRef} style={{ width: canvasWidth, minHeight: canvasH, position: "relative" }}>
+      {hoverPlant ? (
+        <div
+          style={{
+            position: "absolute",
+            left: hoverPlant.x,
+            top: hoverPlant.y,
+            transform: "translate(0, -100%)",
+            pointerEvents: "none",
+            background: "rgba(20,20,20,0.82)",
+            color: "#fff",
+            padding: "4px 8px",
+            borderRadius: 6,
+            fontSize: 12,
+            lineHeight: 1.2,
+            whiteSpace: "nowrap",
+            zIndex: 20,
+          }}
+        >
+          {hoverPlant.name}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 
