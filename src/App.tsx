@@ -107,8 +107,11 @@ export default function App() {
   const layoutScore = useMemo(() => scoreLayout(garden, allVariants), [garden, allVariants]);
 
   const canvasWidth = Math.max(520, frontPaneWidth - 4);
-  const colGap = Math.max(52, Math.floor((canvasWidth - 120) / Math.max(1, garden.cols)));
-  const rowGap = Math.max(40, Math.round(colGap * rowGapRatio));
+  const frameThickness = 36;
+  const horizontalPadding = frameThickness * 2 + 48;
+  const availableGridWidth = Math.max(160, canvasWidth - horizontalPadding);
+  const colGap = Math.max(18, Math.floor(availableGridWidth / Math.max(1, garden.cols)));
+  const rowGap = Math.max(18, Math.round(colGap * rowGapRatio));
 
   function getCell(next: GardenState, r: number, c: number) {
     return next.cells.find((x) => x.row === r && x.col === c) ?? null;
