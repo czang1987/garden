@@ -31,7 +31,7 @@ function buildLockGrid(garden: GardenState, variants: PlantVariant[]) {
 }
 
 export default function App() {
-  const [garden, setGarden] = useState<GardenState>(createGarden(5, 5));
+  const [garden, setGarden] = useState<GardenState>(createGarden(20, 20));
   const [rowGapRatio, setRowGapRatio] = useState(0.77);
   const [rowsInput, setRowsInput] = useState(garden.rows);
   const [colsInput, setColsInput] = useState(garden.cols);

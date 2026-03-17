@@ -57,8 +57,8 @@ export function relativeHeightFactor(
     if (!existingVariant) continue;
 
     const existingFp = (existingVariant.footprint ?? [1, 1]) as [number, number];
-    const existingRowStart = existing.r;
-    const existingRowEnd = existing.r + existingFp[0] - 1;
+    const existingRowStart = existing.r - existingFp[0] + 1;
+    const existingRowEnd = existing.r;
     const existingColStart = existing.c;
     const existingColEnd = existing.c + existingFp[1] - 1;
 
@@ -152,8 +152,10 @@ function canPlace(
   fp: [number, number]
 ) {
   const [h, w] = fp;
-  if (r + h > rows || c + w > cols) return false;
-  for (let rr = r; rr < r + h; rr++) {
+  const top = r - h + 1;
+  const bottom = r;
+  if (top < 0 || bottom >= rows || c < 0 || c + w > cols) return false;
+  for (let rr = top; rr <= bottom; rr++) {
     for (let cc = c; cc < c + w; cc++) {
       if (occupied[rr][cc]) return false;
     }
@@ -168,7 +170,9 @@ function markOccupied(
   fp: [number, number]
 ) {
   const [h, w] = fp;
-  for (let rr = r; rr < r + h; rr++) {
+  const top = r - h + 1;
+  const bottom = r;
+  for (let rr = top; rr <= bottom; rr++) {
     for (let cc = c; cc < c + w; cc++) {
       occupied[rr][cc] = true;
     }
@@ -261,7 +265,9 @@ export function scoreLayout(
   );
   for (const a of anchors) {
     const fp = (map.get(a.plant)?.footprint ?? [1, 1]) as [number, number];
-    for (let rr = a.row; rr < Math.min(garden.rows, a.row + fp[0]); rr++) {
+    const top = Math.max(0, a.row - fp[0] + 1);
+    const bottom = Math.min(garden.rows - 1, a.row);
+    for (let rr = top; rr <= bottom; rr++) {
       for (let cc = a.col; cc < Math.min(garden.cols, a.col + fp[1]); cc++) {
         occupancy[rr][cc] = true;
       }

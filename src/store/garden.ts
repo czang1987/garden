@@ -14,7 +14,7 @@ export interface GardenState {
   season: Season
 }
 
-export function createGarden(rows = 5, cols = 5): GardenState {
+export function createGarden(rows = 20, cols = 20): GardenState {
   const cells: Cell[] = []
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
