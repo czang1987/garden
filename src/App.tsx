@@ -140,6 +140,7 @@ export default function App() {
   const [backMinHeight, setBackMinHeight] = useState(36);
   const [frontMaxHeight, setFrontMaxHeight] = useState(36);
   const [backMaxHeight, setBackMaxHeight] = useState(96);
+  const [heightGradientStrength, setHeightGradientStrength] = useState(1);
   const [rightPanel, setRightPanel] = useState<"catalog" | "auto">("catalog");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -342,6 +343,7 @@ export default function App() {
         backMinHeight,
         frontMaxHeight,
         backMaxHeight,
+        heightGradientStrength,
       })
     );
     setEditMode(false);
@@ -661,6 +663,20 @@ export default function App() {
                     onLeftChange={(value) => setFrontMaxHeight(Math.max(value, frontMinHeight))}
                     onRightChange={(value) => setBackMaxHeight(Math.max(value, backMinHeight))}
                     width={catalogPaneWidth - 32}
+                  />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                    Height Gradient: {heightGradientStrength.toFixed(2)}
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={heightGradientStrength}
+                    onChange={(e) => setHeightGradientStrength(Number(e.target.value))}
+                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
                   />
                 </div>
                 {selectedCell ? (

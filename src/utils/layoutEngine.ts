@@ -22,6 +22,7 @@ type EngineOptions = {
   backMinHeight?: number;
   frontMaxHeight?: number;
   backMaxHeight?: number;
+  heightGradientStrength?: number;
 };
 
 type Placed = {
@@ -127,7 +128,8 @@ export function relativeHeightFactor(
   candidateRow: number,
   candidateCol: number,
   placed: Placed[],
-  variantMap: Map<string, PlantVariant>
+  variantMap: Map<string, PlantVariant>,
+  heightGradientStrength = 1
 ) {
   let factor = 1;
   const candidateFp = (candidate.footprint ?? [1, 1]) as [number, number];
@@ -164,7 +166,8 @@ export function relativeHeightFactor(
     if(deltaRow*heightDelta>=0){
       const severity = Math.min(1, (Math.abs(heightDelta) / Math.max(existingVariant.baseHeight, 1)) * 1.2);
       const colWeight = deltaCol === 0 ? 1 : 1 / (Math.abs(deltaCol) + 1);
-      factor *= Math.max(0.05, 1 - severity * distanceWeight * colWeight * 5);
+      const strength = 1 + clamp01(heightGradientStrength) * 4;
+      factor *= Math.max(0.05, 1 - severity * distanceWeight * colWeight * strength);
       console.log("severity",severity,"deltaCol",deltaCol,"deltaHeight",Math.abs(heightDelta))
     }
     
@@ -184,7 +187,8 @@ function pickWeighted(
   frontMinHeight: number,
   backMinHeight: number,
   frontMaxHeight: number,
-  backMaxHeight: number
+  backMaxHeight: number,
+  heightGradientStrength: number
 ) {
   if (variants.length === 0) return null;
   const weightedCandidates = variants.map((v, i) => {
@@ -199,7 +203,14 @@ function pickWeighted(
     )
       ? 1
       : 0;
-    const placementFactor = relativeHeightFactor(v, candidateRow, candidateCol, placed, variantMap);
+    const placementFactor = relativeHeightFactor(
+      v,
+      candidateRow,
+      candidateCol,
+      placed,
+      variantMap,
+      heightGradientStrength
+    );
     const base = 1 + ((i % 5) * 0.03);
     return {
       variant: v,
@@ -249,6 +260,7 @@ export function generateAutoLayout(
   const backMinHeight = options.backMinHeight ?? 0;
   const frontMaxHeight = options.frontMaxHeight ?? 200;
   const backMaxHeight = options.backMaxHeight ?? 200;
+  const heightGradientStrength = options.heightGradientStrength ?? 1;
   const total = rows * cols;
   const targetCoverage = clamp01(options.targetCoverage ?? 0.62);
   const targetOccupiedCells = Math.max(1, Math.floor(total * targetCoverage));
@@ -310,7 +322,8 @@ export function generateAutoLayout(
       frontMinHeight,
       backMinHeight,
       frontMaxHeight,
-      backMaxHeight
+      backMaxHeight,
+      heightGradientStrength
     );
     if (!chosen) break;
     const fp = (chosen.footprint ?? [1, 1]) as [number, number];
