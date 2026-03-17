@@ -18,6 +18,10 @@ export type LayoutScore = {
 type EngineOptions = {
   seed?: number;
   targetCoverage?: number;
+  frontMinHeight?: number;
+  backMinHeight?: number;
+  frontMaxHeight?: number;
+  backMaxHeight?: number;
 };
 
 type Placed = {
@@ -28,6 +32,80 @@ type Placed = {
 
 function clamp01(x: number) {
   return Math.max(0, Math.min(1, x));
+}
+
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
+}
+
+function rowRatio(row: number, rows: number) {
+  if (rows <= 1) return 0;
+  return clamp01(row / (rows - 1));
+}
+
+export function minHeightForRow(
+  row: number,
+  rows: number,
+  frontMinHeight: number,
+  backMinHeight: number
+) {
+  return lerp(backMinHeight, frontMinHeight, rowRatio(row, rows));
+}
+
+export function maxHeightForRow(
+  row: number,
+  rows: number,
+  frontMaxHeight: number,
+  backMaxHeight: number
+) {
+  return lerp(backMaxHeight, frontMaxHeight, rowRatio(row, rows));
+}
+
+export function heightFitsRow(
+  height: number,
+  row: number,
+  rows: number,
+  frontMinHeight: number,
+  backMinHeight: number,
+  frontMaxHeight: number,
+  backMaxHeight: number
+) {
+  const minH = minHeightForRow(row, rows, frontMinHeight, backMinHeight);
+  const maxH = maxHeightForRow(row, rows, frontMaxHeight, backMaxHeight);
+  return height >= minH && height <= maxH;
+}
+
+export function prunePlantsByHeightRange(
+  garden: GardenState,
+  variants: PlantVariant[],
+  frontMinHeight: number,
+  backMinHeight: number,
+  frontMaxHeight: number,
+  backMaxHeight: number
+) {
+  const variantMap = new Map(variants.map((v) => [v.id, v] as const));
+  return {
+    ...garden,
+    cells: garden.cells.map((cell) => {
+      if (!cell.plant || cell.plant === "empty") return cell;
+      const variant = variantMap.get(cell.plant);
+      if (!variant) return { ...cell, plant: "empty" };
+      if (
+        !heightFitsRow(
+          variant.baseHeight,
+          cell.row,
+          garden.rows,
+          frontMinHeight,
+          backMinHeight,
+          frontMaxHeight,
+          backMaxHeight
+        )
+      ) {
+        return { ...cell, plant: "empty" };
+      }
+      return cell;
+    }),
+  };
 }
 
 function seededRandom(seed: number) {
@@ -81,7 +159,7 @@ export function relativeHeightFactor(
     const rowDistance = Math.abs(deltaRow);
     if (rowDistance === 0 && deltaCol === 0) continue;
 
-    const distanceWeight = 1 / (rowDistance + deltaCol);
+    const distanceWeight = 1 / (rowDistance +1);
     const heightDelta = candidate.baseHeight - existingVariant.baseHeight;
     if(deltaRow*heightDelta>=0){
       const severity = Math.min(1, (Math.abs(heightDelta) / Math.max(existingVariant.baseHeight, 1)) * 1.2);
@@ -101,16 +179,33 @@ function pickWeighted(
   candidateRow: number,
   candidateCol: number,
   placed: Placed[],
-  variantMap: Map<string, PlantVariant>
+  variantMap: Map<string, PlantVariant>,
+  rows: number,
+  frontMinHeight: number,
+  backMinHeight: number,
+  frontMaxHeight: number,
+  backMaxHeight: number
 ) {
   if (variants.length === 0) return null;
   const weightedCandidates = variants.map((v, i) => {
+    const heightFactor = heightFitsRow(
+      v.baseHeight,
+      candidateRow,
+      rows,
+      frontMinHeight,
+      backMinHeight,
+      frontMaxHeight,
+      backMaxHeight
+    )
+      ? 1
+      : 0;
     const placementFactor = relativeHeightFactor(v, candidateRow, candidateCol, placed, variantMap);
     const base = 1 + ((i % 5) * 0.03);
     return {
       variant: v,
+      heightFactor,
       placementFactor,
-      weight: base * placementFactor,
+      weight: base * placementFactor * heightFactor,
     };
   });
   const sum = weightedCandidates.reduce((a, b) => a + b.weight, 0);
@@ -150,6 +245,10 @@ export function generateAutoLayout(
   const seed = options.seed ?? Date.now();
   const rows = base.rows;
   const cols = base.cols;
+  const frontMinHeight = options.frontMinHeight ?? 0;
+  const backMinHeight = options.backMinHeight ?? 0;
+  const frontMaxHeight = options.frontMaxHeight ?? 200;
+  const backMaxHeight = options.backMaxHeight ?? 200;
   const total = rows * cols;
   const targetCoverage = clamp01(options.targetCoverage ?? 0.62);
   const targetOccupiedCells = Math.max(1, Math.floor(total * targetCoverage));
@@ -173,6 +272,21 @@ export function generateAutoLayout(
 
   for (const cell of next.cells) {
     if (!cell.plant || cell.plant === "empty") continue;
+    const existingVariant = variantMap.get(cell.plant);
+    if (
+      existingVariant &&
+      !heightFitsRow(
+        existingVariant.baseHeight,
+        cell.row,
+        rows,
+        frontMinHeight,
+        backMinHeight,
+        frontMaxHeight,
+        backMaxHeight
+      )
+    ) {
+      continue;
+    }
     const fp = (variantMap.get(cell.plant)?.footprint ?? [1, 1]) as [number, number];
     if (!canPlaceFootprint(occupied, rows, cols, { r: cell.row, c: cell.col }, fp)) continue;
     markFootprint(occupied, { r: cell.row, c: cell.col }, fp);
@@ -185,7 +299,19 @@ export function generateAutoLayout(
     const { r, c } = shuffled[idx++];
     if (occupied[r][c]) continue;
 
-    const chosen = pickWeighted(variants, seed + r * 131 + c * 17, r, c, placed, variantMap);
+    const chosen = pickWeighted(
+      variants,
+      seed + r * 131 + c * 17,
+      r,
+      c,
+      placed,
+      variantMap,
+      rows,
+      frontMinHeight,
+      backMinHeight,
+      frontMaxHeight,
+      backMaxHeight
+    );
     if (!chosen) break;
     const fp = (chosen.footprint ?? [1, 1]) as [number, number];
 

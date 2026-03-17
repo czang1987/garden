@@ -1,12 +1,130 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import PlantCatalog from "./components/PlantCatalog";
 import { FrontView } from "./views/FrontView";
 import { createGarden, resizeGarden } from "./store/garden";
 import type { GardenState, Season } from "./store/garden";
 import type { PlantCatalogData, PlantCategory, PlantVariant } from "./type/plants";
-import { generateAutoLayout, relativeHeightFactor, scoreLayout } from "./utils/layoutEngine";
+import {
+  generateAutoLayout,
+  heightFitsRow,
+  maxHeightForRow,
+  minHeightForRow,
+  prunePlantsByHeightRange,
+  relativeHeightFactor,
+  scoreLayout,
+} from "./utils/layoutEngine";
 import { buildOccupancyGrid, footprintCells } from "./utils/footprint";
 import { buildLayoutFile, formatLayoutFileAsReadableText, parseLayoutText } from "./utils/layoutIo";
+
+function clampValue(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function DualSlider({
+  min,
+  max,
+  step,
+  leftValue,
+  rightValue,
+  onLeftChange,
+  onRightChange,
+  width = 260,
+}: {
+  min: number;
+  max: number;
+  step: number;
+  leftValue: number;
+  rightValue: number;
+  onLeftChange: (value: number) => void;
+  onRightChange: (value: number) => void;
+  width?: number;
+}) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [dragging, setDragging] = useState<"left" | "right" | null>(null);
+  const range = Math.max(step, max - min);
+  const leftPct = ((leftValue - min) / range) * 100;
+  const rightPct = ((rightValue - min) / range) * 100;
+
+  useEffect(() => {
+    if (!dragging) return;
+
+    const updateFromClientX = (clientX: number) => {
+      if (!trackRef.current) return;
+      const rect = trackRef.current.getBoundingClientRect();
+      const raw = min + ((clientX - rect.left) / Math.max(1, rect.width)) * range;
+      const snapped = clampValue(Math.round(raw / step) * step, min, max);
+      if (dragging === "left") onLeftChange(Math.min(snapped, rightValue));
+      else onRightChange(Math.max(snapped, leftValue));
+    };
+
+    const onMove = (event: PointerEvent) => updateFromClientX(event.clientX);
+    const onUp = () => setDragging(null);
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [dragging, leftValue, max, min, onLeftChange, onRightChange, range, rightValue, step]);
+
+  return (
+    <div style={{ width, padding: "8px 0" }}>
+      <div
+        ref={trackRef}
+        onPointerDown={(event) => {
+          if (!trackRef.current) return;
+          const rect = trackRef.current.getBoundingClientRect();
+          const pct = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 100;
+          setDragging(Math.abs(pct - leftPct) <= Math.abs(pct - rightPct) ? "left" : "right");
+        }}
+        style={{
+          position: "relative",
+          height: 6,
+          borderRadius: 999,
+          background: "#d8d8d8",
+          cursor: "pointer",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: `${leftPct}%`,
+            width: `${Math.max(0, rightPct - leftPct)}%`,
+            top: 0,
+            bottom: 0,
+            background: "#6e8f72",
+            borderRadius: 999,
+          }}
+        />
+        {[
+          { side: "left" as const, pct: leftPct },
+          { side: "right" as const, pct: rightPct },
+        ].map((thumb) => (
+          <div
+            key={thumb.side}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              setDragging(thumb.side);
+            }}
+            style={{
+              position: "absolute",
+              left: `calc(${thumb.pct}% - 9px)`,
+              top: -6,
+              width: 18,
+              height: 18,
+              borderRadius: "50%",
+              background: "#fff",
+              border: "2px solid #6e8f72",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
+              cursor: "grab",
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [garden, setGarden] = useState<GardenState>(createGarden(20, 20));
@@ -18,6 +136,10 @@ export default function App() {
   const [editMode, setEditMode] = useState(false);
   const [frontPaneWidth, setFrontPaneWidth] = useState(960);
   const [catalogPaneWidth, setCatalogPaneWidth] = useState(320);
+  const [frontMinHeight, setFrontMinHeight] = useState(12);
+  const [backMinHeight, setBackMinHeight] = useState(36);
+  const [frontMaxHeight, setFrontMaxHeight] = useState(36);
+  const [backMaxHeight, setBackMaxHeight] = useState(96);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -110,7 +232,6 @@ export default function App() {
       if (covered.some((occupiedCell) => occupiedCell.r === selectedCell.r && occupiedCell.c === selectedCell.c)) {
         return {
           anchor: cell,
-          variant,
           footprint: fp,
         };
       }
@@ -131,6 +252,20 @@ export default function App() {
 
   function canPlaceAtSelected(v: PlantVariant) {
     if (!selectedCell) return false;
+    if (
+      !heightFitsRow(
+        v.baseHeight,
+        selectedCell.r,
+        garden.rows,
+        frontMinHeight,
+        backMinHeight,
+        frontMaxHeight,
+        backMaxHeight
+      )
+    ) {
+      return false;
+    }
+
     const freed = selectedPlantFreedCells();
     const fp = (v.footprint ?? [1, 1]) as [number, number];
 
@@ -143,6 +278,22 @@ export default function App() {
 
   function disabledReason(v: PlantVariant) {
     if (!selectedCell) return "请先点击一个位置";
+    if (
+      !heightFitsRow(
+        v.baseHeight,
+        selectedCell.r,
+        garden.rows,
+        frontMinHeight,
+        backMinHeight,
+        frontMaxHeight,
+        backMaxHeight
+      )
+    ) {
+      const minH = Math.round(minHeightForRow(selectedCell.r, garden.rows, frontMinHeight, backMinHeight));
+      const maxH = Math.round(maxHeightForRow(selectedCell.r, garden.rows, frontMaxHeight, backMaxHeight));
+      return `当前行允许高度 ${minH}-${maxH}`;
+    }
+
     const freed = selectedPlantFreedCells();
     const fp = (v.footprint ?? [1, 1]) as [number, number];
 
@@ -213,7 +364,15 @@ export default function App() {
   }
 
   function autoGenerate() {
-    setGarden((prev) => generateAutoLayout(prev, allVariants, { targetCoverage: 0.62 }));
+    setGarden((prev) =>
+      generateAutoLayout(prev, allVariants, {
+        targetCoverage: 0.62,
+        frontMinHeight,
+        backMinHeight,
+        frontMaxHeight,
+        backMaxHeight,
+      })
+    );
     setEditMode(false);
     setSelectedCell(null);
   }
@@ -283,6 +442,19 @@ export default function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedCell, garden, allVariants]);
+
+  useEffect(() => {
+    setGarden((prev) =>
+      prunePlantsByHeightRange(
+        prev,
+        allVariants,
+        frontMinHeight,
+        backMinHeight,
+        frontMaxHeight,
+        backMaxHeight
+      )
+    );
+  }, [allVariants, backMaxHeight, backMinHeight, frontMaxHeight, frontMinHeight]);
 
   return (
     <div style={{ padding: 16, maxWidth: 1800, margin: "0 auto" }}>
@@ -362,6 +534,57 @@ export default function App() {
           COL_GAP: {colGap} / ROW_GAP: {rowGap}
         </span>
       </div>
+
+      <div style={{ marginBottom: 16, display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            Min Height: {frontMinHeight} - {backMinHeight}
+          </div>
+          <DualSlider
+            min={0}
+            max={120}
+            step={1}
+            leftValue={frontMinHeight}
+            rightValue={backMinHeight}
+            onLeftChange={setFrontMinHeight}
+            onRightChange={setBackMinHeight}
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            Max Height: {frontMaxHeight} - {backMaxHeight}
+          </div>
+          <DualSlider
+            min={0}
+            max={160}
+            step={1}
+            leftValue={frontMaxHeight}
+            rightValue={backMaxHeight}
+            onLeftChange={(value) => setFrontMaxHeight(Math.max(value, frontMinHeight))}
+            onRightChange={(value) => setBackMaxHeight(Math.max(value, backMinHeight))}
+          />
+        </div>
+      </div>
+
+      {selectedCell ? (
+        <div
+          style={{
+            marginBottom: 12,
+            fontSize: 13,
+            color: "#4f5f4f",
+            background: "#f5f8f2",
+            border: "1px solid #d7e2d1",
+            borderRadius: 8,
+            padding: "8px 10px",
+            display: "inline-block",
+          }}
+        >
+          当前选中行允许高度:{" "}
+          {Math.round(minHeightForRow(selectedCell.r, garden.rows, frontMinHeight, backMinHeight))}
+          {" - "}
+          {Math.round(maxHeightForRow(selectedCell.r, garden.rows, frontMaxHeight, backMaxHeight))}
+        </div>
+      ) : null}
 
       <div
         ref={editorRef}

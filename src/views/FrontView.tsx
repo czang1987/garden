@@ -31,6 +31,7 @@ type LayoutMetrics = {
 
 type HoverPlant = {
   name: string;
+  height: number;
   x: number;
   y: number;
 };
@@ -515,6 +516,7 @@ export function FrontView({
 
       setHoverPlant({
         name: plant.name,
+        height: plant.baseHeight,
         x: x + 12,
         y: y - 12,
       });
@@ -659,7 +661,7 @@ export function FrontView({
             zIndex: 20,
           }}
         >
-          {hoverPlant.name}
+          {hoverPlant.name} ({hoverPlant.height})
         </div>
       ) : null}
     </div>
