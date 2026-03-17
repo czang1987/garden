@@ -133,7 +133,7 @@ async function drawBrickFrameEdges(
     height: thickness,
   });
   top.position.set(baseX - thickness, baseY - thickness);
-  top.tileScale.x = colGap / Math.max(tex.width || 1, 1);
+  top.tileScale.x = (colGap * 2) / Math.max(tex.width || 1, 1);
   top.tileScale.y = thickness / Math.max(tex.height || 1, 1);
 
   const bottom = new PIXI.TilingSprite({
@@ -142,7 +142,7 @@ async function drawBrickFrameEdges(
     height: thickness,
   });
   bottom.position.set(baseX - thickness, baseY + gridH);
-  bottom.tileScale.x = colGap / Math.max(tex.width || 1, 1);
+  bottom.tileScale.x = (colGap * 2) / Math.max(tex.width || 1, 1);
   bottom.tileScale.y = thickness / Math.max(tex.height || 1, 1);
 
   const left = new PIXI.TilingSprite({
@@ -152,7 +152,7 @@ async function drawBrickFrameEdges(
   });
   left.position.set(baseX - thickness, baseY);
   left.tileScale.x = thickness / Math.max(tex.width || 1, 1);
-  left.tileScale.y = rowGap / Math.max(tex.height || 1, 1);
+  left.tileScale.y = (rowGap * 2) / Math.max(tex.height || 1, 1);
 
   const right = new PIXI.TilingSprite({
     texture: tex,
@@ -161,7 +161,7 @@ async function drawBrickFrameEdges(
   });
   right.position.set(baseX + gridW, baseY);
   right.tileScale.x = thickness / Math.max(tex.width || 1, 1);
-  right.tileScale.y = rowGap / Math.max(tex.height || 1, 1);
+  right.tileScale.y = (rowGap * 2) / Math.max(tex.height || 1, 1);
 
   const outline = new PIXI.Graphics();
   outline.rect(baseX - thickness, baseY - thickness, gridW + thickness * 2, gridH + thickness * 2).stroke({

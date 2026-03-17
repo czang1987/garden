@@ -212,7 +212,7 @@ export default function App() {
   const horizontalPadding = frameThickness * 2 + 48;
   const availableGridWidth = Math.max(160, canvasWidth - horizontalPadding);
   const colGap = Math.max(18, Math.floor(availableGridWidth / Math.max(1, garden.cols)));
-  const rowGap = Math.max(18, Math.round(colGap * rowGapRatio));
+  const rowGap = Math.max(4, Math.round(colGap * rowGapRatio));
 
   function getCell(next: GardenState, r: number, c: number) {
     return next.cells.find((x) => x.row === r && x.col === c) ?? null;
