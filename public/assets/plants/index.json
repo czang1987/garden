@@ -9,14 +9,14 @@
           "id": "rose_knockout_red",
           "name": "Knock Out（红）",
           "icon": "/assets/plants/rose_knockout_red/icon.png",
-          "link":"https://www.homedepot.com/p/KNOCK-OUT-2-gal-Red-Double-Knock-Out-Rose-With-Red-Flowers-HD3159/339238374",
+          "link": "https://www.homedepot.com/p/KNOCK-OUT-2-gal-Red-Double-Knock-Out-Rose-With-Red-Flowers-HD3159/339238374",
           "baseHeight": 48,
-          "baseWidth":48,
-          "zone":"5-11",
+          "baseWidth": 48,
+          "zone": "5-11",
           "sizeref": "h4w4",
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "红",
@@ -35,13 +35,13 @@
           "id": "rose_iceberg_white",
           "name": "Iceberg（白）",
           "icon": "/assets/plants/rose_iceberg_white/icon.png",
-          "link":"https://www.homedepot.com/p/DIRECT-GARDENING-Iceberg-White-Flowering-Climbing-Rose-Bush-Dormant-Bare-Root-Starter-Plant-1-Pack-99229/334435255?MERCH=REC-_-pipinstock-_-329147068-_-0-_-n/a-_-n/a-_-n/a-_-n/a-_-n/a",
+          "link": "https://www.homedepot.com/p/DIRECT-GARDENING-Iceberg-White-Flowering-Climbing-Rose-Bush-Dormant-Bare-Root-Starter-Plant-1-Pack-99229/334435255?MERCH=REC-_-pipinstock-_-329147068-_-0-_-n/a-_-n/a-_-n/a-_-n/a-_-n/a",
           "baseHeight": 48,
-          "baseWidth":36,
-          "zone":"5-9",
+          "baseWidth": 36,
+          "zone": "5-9",
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "白",
@@ -66,13 +66,13 @@
           "id": "hydrangea_blue_bush",
           "name": "大花绣球（蓝）",
           "icon": "/assets/plants/hydrangea_blue_bush/icon.png",
-          "link":"https://www.lowes.com/pd/Southern-Living-Plant-Collection-2-5-Qt-Hydrangea-Big-Daddy/5015643673",
-          "zone":"4-9",
+          "link": "https://www.lowes.com/pd/Southern-Living-Plant-Collection-2-5-Qt-Hydrangea-Big-Daddy/5015643673",
+          "zone": "4-9",
           "baseHeight": 72,
-          "baseWidth":72,
+          "baseWidth": 72,
           "footprint": [
-            1,
-            2
+            4,
+            8
           ],
           "tags": [
             "蓝"
@@ -89,13 +89,13 @@
           "id": "hydrangea_paniculata_limelight",
           "name": "圆锥绣球 Limelight",
           "icon": "/assets/plants/hydrangea_paniculata_limelight/icon.png",
-          "link":"https://www.lowes.com/pd/Proven-Winners-Multicolor-Hydrangea-Flowering-Shrub-in-1-Quart-In-Pot-With-Soil/5014250349",
-          "zone":"3-9",
+          "link": "https://www.lowes.com/pd/Proven-Winners-Multicolor-Hydrangea-Flowering-Shrub-in-1-Quart-In-Pot-With-Soil/5014250349",
+          "zone": "3-9",
           "baseHeight": 84,
           "baseWidth": 84,
           "footprint": [
-            1,
-            2
+            4,
+            8
           ],
           "tags": [
             "绣球",
@@ -121,13 +121,13 @@
           "id": "tulip_red",
           "name": "红郁金香",
           "icon": "/assets/plants/tulip_red/icon.png",
-          "link":"https://www.lowes.com/pd/Tulip-Purple-Forced-Bulbs-1-0PT-4-Pack/5013350025",
-          "zone":"3-9",
+          "link": "https://www.lowes.com/pd/Tulip-Purple-Forced-Bulbs-1-0PT-4-Pack/5013350025",
+          "zone": "3-9",
           "baseHeight": 10,
-          "baseWidth":6,
+          "baseWidth": 6,
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "红",
@@ -151,14 +151,13 @@
           "id": "lavender_english",
           "name": "英格兰薰衣草",
           "icon": "/assets/plants/lavender_english/icon.png",
-          "link":"https://www.lowes.com/pd/Spring-Hill-Nurseries-Lavender-Lightsaber-Speedwell-Perennial-Plant-in-1-Pack-Bareroot/5013483433",
-          "baseWidth":20,
+          "link": "https://www.lowes.com/pd/Spring-Hill-Nurseries-Lavender-Lightsaber-Speedwell-Perennial-Plant-in-1-Pack-Bareroot/5013483433",
+          "baseWidth": 20,
           "baseHeight": 30,
-          "zone":"4-8",
-          
+          "zone": "4-8",
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "紫",
@@ -178,18 +177,17 @@
       "id": "shrubs",
       "name": "灌木",
       "variants": [
-        
         {
           "id": "boxwood_green_mountain",
           "name": "黄杨 Green Mountain",
           "icon": "/assets/plants/boxwood_green_mountain/icon.png",
-          "link":"https://www.lowes.com/pd/Monrovia-Boxwood-Green-Mountain-Feature-Shrub-in-1-73-Gallon-Pot-1-Pack-with-Yellow-Blooms/5017782423",
-          "zone":"4-9",
+          "link": "https://www.lowes.com/pd/Monrovia-Boxwood-Green-Mountain-Feature-Shrub-in-1-73-Gallon-Pot-1-Pack-with-Yellow-Blooms/5017782423",
+          "zone": "4-9",
           "baseHeight": 60,
           "baseWidth": 60,
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "常绿",
@@ -205,13 +203,13 @@
           "id": "arborvitae_emerald_green",
           "name": "侧柏 Emerald Green",
           "icon": "/assets/plants/arborvitae_emerald_green/icon.png",
-          "link":"https://www.lowes.com/pd/Emerald-Green-Arborvitae-Screening-Shrub-in-2-5-Quart-Pot/5014907483",
-          "baseWidth":48,
+          "link": "https://www.lowes.com/pd/Emerald-Green-Arborvitae-Screening-Shrub-in-2-5-Quart-Pot/5014907483",
+          "baseWidth": 48,
           "baseHeight": 180,
-          "zone":"3-9",
+          "zone": "3-9",
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "隐私屏障",
@@ -233,13 +231,13 @@
           "id": "echinacea_purple_coneflower",
           "name": "紫锥花",
           "icon": "/assets/plants/echinacea_purple_coneflower/icon.png",
-          "link":"https://www.lowes.com/pd/Direct-Gardening-Purple-Flowering-Pow-Wow-Wild-Berry-Coneflower-Dormant-Plant-in-1-Pack-Bareroot-1-Pack/5016126513",
+          "link": "https://www.lowes.com/pd/Direct-Gardening-Purple-Flowering-Pow-Wow-Wild-Berry-Coneflower-Dormant-Plant-in-1-Pack-Bareroot-1-Pack/5016126513",
           "baseHeight": 36,
-          "baseWidth":18,
-          "zone":"3-9",
+          "baseWidth": 18,
+          "zone": "3-9",
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "传粉友好",
@@ -258,14 +256,13 @@
           "id": "rudbeckia_black_eyed_susan",
           "name": "黑心金光菊",
           "icon": "/assets/plants/rudbeckia_black_eyed_susan/icon.png",
-          "link":"https://www.lowes.com/pd/Ferry-Morse-LCP-BLACKN-EYED-SUSAN-RUDBECKIA/5015733363?idProductFound=false&idExtracted=false",
-          "zone":"2-11",
-
+          "link": "https://www.lowes.com/pd/Ferry-Morse-LCP-BLACKN-EYED-SUSAN-RUDBECKIA/5015733363?idProductFound=false&idExtracted=false",
+          "zone": "2-11",
           "baseHeight": 24,
-          "baseWidth":12,
+          "baseWidth": 12,
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "耐热",
@@ -284,13 +281,13 @@
           "id": "hosta_frances_williams",
           "name": "玉簪 Frances Williams",
           "icon": "/assets/plants/hosta_frances_williams/icon.png",
-          "link":"https://www.lowes.com/pd/Van-Zyverden-Van-Zyverden-Hosta-Minuteman-Set-of-3-Roots/5013202727",
+          "link": "https://www.lowes.com/pd/Van-Zyverden-Van-Zyverden-Hosta-Minuteman-Set-of-3-Roots/5013202727",
           "baseWidth": 24,
           "baseHeight": 24,
-          "zone":"3-8",
+          "zone": "3-8",
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "耐阴",
@@ -308,13 +305,13 @@
           "id": "peony_sarah_bernhardt",
           "name": "芍药 Sarah Bernhardt",
           "icon": "/assets/plants/peony_sarah_bernhardt/icon.png",
-          "link":"https://www.lowes.com/pd/Van-Zyverden-Pink-Peony-Sarah-Bernhardt-Bulbs-Bagged-3-Count/1000527295",
+          "link": "https://www.lowes.com/pd/Van-Zyverden-Pink-Peony-Sarah-Bernhardt-Bulbs-Bagged-3-Count/1000527295",
           "baseHeight": 36,
-          "baseWidth":36,
-          "zone":"3-8",
+          "baseWidth": 36,
+          "zone": "3-8",
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "大花",
@@ -339,13 +336,13 @@
           "id": "panicum_northwind",
           "name": "柳枝稷 Northwind",
           "icon": "/assets/plants/panicum_northwind/icon.png",
-          "link":"https://www.lowes.com/pd/Spring-Hill-Nurseries-Northwinds-Panicum-Dormant-Ornamental-Grass-in-Bareroot/5013366533",
+          "link": "https://www.lowes.com/pd/Spring-Hill-Nurseries-Northwinds-Panicum-Dormant-Ornamental-Grass-in-Bareroot/5013366533",
           "baseHeight": 72,
-          "baseWidth":48,
+          "baseWidth": 48,
           "renderScale": 0.9,
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "观赏草",
@@ -364,14 +361,14 @@
           "id": "schizachyrium_little_bluestem",
           "name": "小须芒草 Little Bluestem",
           "icon": "/assets/plants/schizachyrium_little_bluestem/icon.png",
-          "link":"https://www.greatgardenplants.com/products/twilight-zone-little-bluestem-grass?variant=42917845106855&tw_source=google&tw_adid=&tw_campaign=18056497623&tw_kwdid=&gad_source=1&gad_campaignid=17336235066&gbraid=0AAAAAD-Q5OBOCod13LcLiu1O0Hb-yTKRq&gclid=Cj0KCQiAk6rNBhCxARIsAN5mQLuk6U-04dJjg_SCafnKmjvmjy2Ltk_hihkcIhi8UmIxKD-Q9JwXTCsaAsTCEALw_wcB",
+          "link": "https://www.greatgardenplants.com/products/twilight-zone-little-bluestem-grass?variant=42917845106855&tw_source=google&tw_adid=&tw_campaign=18056497623&tw_kwdid=&gad_source=1&gad_campaignid=17336235066&gbraid=0AAAAAD-Q5OBOCod13LcLiu1O0Hb-yTKRq&gclid=Cj0KCQiAk6rNBhCxARIsAN5mQLuk6U-04dJjg_SCafnKmjvmjy2Ltk_hihkcIhi8UmIxKD-Q9JwXTCsaAsTCEALw_wcB",
           "baseHeight": 60,
-          "baseWidth":48,
+          "baseWidth": 48,
           "renderScale": 1.55,
-          "zone":"3-9",
+          "zone": "3-9",
           "footprint": [
-            1,
-            1
+            4,
+            4
           ],
           "tags": [
             "本土",
