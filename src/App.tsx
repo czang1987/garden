@@ -5,30 +5,8 @@ import { createGarden, resizeGarden } from "./store/garden";
 import type { GardenState, Season } from "./store/garden";
 import type { PlantCatalogData, PlantCategory, PlantVariant } from "./type/plants";
 import { generateAutoLayout, relativeHeightFactor, scoreLayout } from "./utils/layoutEngine";
+import { buildOccupancyGrid, footprintCells } from "./utils/footprint";
 import { buildLayoutFile, formatLayoutFileAsReadableText, parseLayoutText } from "./utils/layoutIo";
-
-function buildLockGrid(garden: GardenState, variants: PlantVariant[]) {
-  const out = Array.from({ length: garden.rows }, () =>
-    Array.from({ length: garden.cols }, () => false)
-  );
-  const variantMap = new Map(variants.map((v) => [v.id, v] as const));
-
-  for (const cell of garden.cells) {
-    if (!cell.plant || cell.plant === "empty") continue;
-    const fp = (variantMap.get(cell.plant)?.footprint ?? [1, 1]) as [number, number];
-    for (let dr = 0; dr < fp[0]; dr++) {
-      for (let dc = 0; dc < fp[1]; dc++) {
-        const rr = cell.row - dr;
-        const cc = cell.col + dc;
-        if (rr >= 0 && rr < garden.rows && cc >= 0 && cc < garden.cols) {
-          out[rr][cc] = true;
-        }
-      }
-    }
-  }
-
-  return out;
-}
 
 export default function App() {
   const [garden, setGarden] = useState<GardenState>(createGarden(20, 20));
@@ -103,7 +81,7 @@ export default function App() {
     return out;
   }, [categories]);
 
-  const occupancy = useMemo(() => buildLockGrid(garden, allVariants), [garden, allVariants]);
+  const occupancy = useMemo(() => buildOccupancyGrid(garden, allVariants), [garden, allVariants]);
   const layoutScore = useMemo(() => scoreLayout(garden, allVariants), [garden, allVariants]);
 
   const canvasWidth = Math.max(520, frontPaneWidth - 4);
@@ -115,17 +93,6 @@ export default function App() {
 
   function getCell(next: GardenState, r: number, c: number) {
     return next.cells.find((x) => x.row === r && x.col === c) ?? null;
-  }
-
-  function footprintCells(anchor: { r: number; c: number }, fp: [number, number]) {
-    const [h, w] = fp;
-    const cells: { r: number; c: number }[] = [];
-    for (let dr = 0; dr < h; dr++) {
-      for (let dc = 0; dc < w; dc++) {
-        cells.push({ r: anchor.r - dr, c: anchor.c + dc });
-      }
-    }
-    return cells;
   }
 
   function inBounds(rr: number, cc: number) {

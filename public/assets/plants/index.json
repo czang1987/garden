@@ -339,7 +339,7 @@
           "link": "https://www.lowes.com/pd/Spring-Hill-Nurseries-Northwinds-Panicum-Dormant-Ornamental-Grass-in-Bareroot/5013366533",
           "baseHeight": 72,
           "baseWidth": 48,
-          "renderScale": 0.9,
+         
           "footprint": [
             4,
             4
@@ -364,7 +364,7 @@
           "link": "https://www.greatgardenplants.com/products/twilight-zone-little-bluestem-grass?variant=42917845106855&tw_source=google&tw_adid=&tw_campaign=18056497623&tw_kwdid=&gad_source=1&gad_campaignid=17336235066&gbraid=0AAAAAD-Q5OBOCod13LcLiu1O0Hb-yTKRq&gclid=Cj0KCQiAk6rNBhCxARIsAN5mQLuk6U-04dJjg_SCafnKmjvmjy2Ltk_hihkcIhi8UmIxKD-Q9JwXTCsaAsTCEALw_wcB",
           "baseHeight": 60,
           "baseWidth": 48,
-          "renderScale": 1.55,
+          
           "zone": "3-9",
           "footprint": [
             4,

@@ -7,7 +7,6 @@ export type PlantVariant = {
   link?: string;
   baseHeight: number;
   footprint?: [number, number];
-  renderScale?: number;
   tags?: string[];
   sun?: "full" | "partial" | "shade";
   water?: "low" | "medium" | "high";

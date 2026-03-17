@@ -1,5 +1,6 @@
 import type { GardenState } from "../store/garden";
 import type { PlantVariant } from "../type/plants";
+import { canPlaceFootprint, footprintBounds, markFootprint } from "./footprint";
 
 type ScoreBreakdown = {
   coverage: number;
@@ -57,10 +58,11 @@ export function relativeHeightFactor(
     if (!existingVariant) continue;
 
     const existingFp = (existingVariant.footprint ?? [1, 1]) as [number, number];
-    const existingRowStart = existing.r - existingFp[0] + 1;
-    const existingRowEnd = existing.r;
-    const existingColStart = existing.c;
-    const existingColEnd = existing.c + existingFp[1] - 1;
+    const bounds = footprintBounds({ r: existing.r, c: existing.c }, existingFp);
+    const existingRowStart = bounds.top;
+    const existingRowEnd = bounds.bottom;
+    const existingColStart = bounds.left;
+    const existingColEnd = bounds.right;
 
     let deltaRow = 0;
     if (candidateRow < existingRowStart) deltaRow = candidateRow - existingRowStart;
@@ -143,42 +145,6 @@ function pickWeighted(
   return fallback.variant;
 }
 
-function canPlace(
-  occupied: boolean[][],
-  rows: number,
-  cols: number,
-  r: number,
-  c: number,
-  fp: [number, number]
-) {
-  const [h, w] = fp;
-  const top = r - h + 1;
-  const bottom = r;
-  if (top < 0 || bottom >= rows || c < 0 || c + w > cols) return false;
-  for (let rr = top; rr <= bottom; rr++) {
-    for (let cc = c; cc < c + w; cc++) {
-      if (occupied[rr][cc]) return false;
-    }
-  }
-  return true;
-}
-
-function markOccupied(
-  occupied: boolean[][],
-  r: number,
-  c: number,
-  fp: [number, number]
-) {
-  const [h, w] = fp;
-  const top = r - h + 1;
-  const bottom = r;
-  for (let rr = top; rr <= bottom; rr++) {
-    for (let cc = c; cc < c + w; cc++) {
-      occupied[rr][cc] = true;
-    }
-  }
-}
-
 export function generateAutoLayout(
   base: GardenState,
   variants: PlantVariant[],
@@ -211,8 +177,8 @@ export function generateAutoLayout(
   for (const cell of next.cells) {
     if (!cell.plant || cell.plant === "empty") continue;
     const fp = (variantMap.get(cell.plant)?.footprint ?? [1, 1]) as [number, number];
-    if (!canPlace(occupied, rows, cols, cell.row, cell.col, fp)) continue;
-    markOccupied(occupied, cell.row, cell.col, fp);
+    if (!canPlaceFootprint(occupied, rows, cols, { r: cell.row, c: cell.col }, fp)) continue;
+    markFootprint(occupied, { r: cell.row, c: cell.col }, fp);
     used += fp[0] * fp[1];
     placed.push({ r: cell.row, c: cell.col, id: cell.plant });
   }
@@ -226,8 +192,8 @@ export function generateAutoLayout(
     if (!chosen) break;
     const fp = (chosen.footprint ?? [1, 1]) as [number, number];
 
-    if (!canPlace(occupied, rows, cols, r, c, fp)) continue;
-    markOccupied(occupied, r, c, fp);
+    if (!canPlaceFootprint(occupied, rows, cols, { r, c }, fp)) continue;
+    markFootprint(occupied, { r, c }, fp);
     used += fp[0] * fp[1];
     placed.push({ r, c, id: chosen.id });
   }
@@ -265,10 +231,9 @@ export function scoreLayout(
   );
   for (const a of anchors) {
     const fp = (map.get(a.plant)?.footprint ?? [1, 1]) as [number, number];
-    const top = Math.max(0, a.row - fp[0] + 1);
-    const bottom = Math.min(garden.rows - 1, a.row);
-    for (let rr = top; rr <= bottom; rr++) {
-      for (let cc = a.col; cc < Math.min(garden.cols, a.col + fp[1]); cc++) {
+    const bounds = footprintBounds({ r: a.row, c: a.col }, fp);
+    for (let rr = Math.max(0, bounds.top); rr <= Math.min(garden.rows - 1, bounds.bottom); rr++) {
+      for (let cc = Math.max(0, bounds.left); cc <= Math.min(garden.cols - 1, bounds.right); cc++) {
         occupancy[rr][cc] = true;
       }
     }

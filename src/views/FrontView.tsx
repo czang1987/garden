@@ -1,6 +1,7 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 import type { GardenState } from "../store/garden";
+import { footprintCells } from "../utils/footprint";
 
 const DEFAULT_ROW_GAP = 85;
 const BASE_HEIGHT_UNIT_SCALE = 2;
@@ -17,7 +18,6 @@ type PlantVariant = {
   icon: string;
   baseHeight: number;
   footprint?: [number, number];
-  renderScale?: number;
 };
 
 type PlantCatalogData = {
@@ -334,14 +334,13 @@ export function FrontView({
         if (!meta) continue;
 
         const fp = (meta.footprint ?? [1, 1]) as [number, number];
-        const renderScale = meta.renderScale ?? 1;
         const tex = await loadPlantTexture(cell.plant, garden.season);
         if (canceled) return;
 
         const widthScale = (colGap * fp[1]) / Math.max(tex.width || 1, 1);
         const rowDistanceToBack = maxRow - cell.row;
         const depth = Math.max(0.55, 1 - rowDistanceToBack * DEPTH_K);
-        const displayedHeight = (tex.height || 1) * widthScale * renderScale * depth;
+        const displayedHeight = (tex.height || 1) * widthScale * depth;
         const minBaseYForCell = Math.ceil(displayedHeight - (cell.row + 1) * rowGap + 40);
         requiredBaseY = Math.max(requiredBaseY, minBaseYForCell);
       }
@@ -475,8 +474,6 @@ export function FrontView({
 
         const meta = variantMap.get(plantId);
         const fp = (meta?.footprint ?? [1, 1]) as [number, number];
-        const renderScale = meta?.renderScale ?? 1;
-
         const tex = await loadPlantTexture(plantId, garden.season);
         if (canceled) return;
 
@@ -490,8 +487,6 @@ export function FrontView({
           .fill({ color: 0x000000, alpha: 0.12 });
 
         fitSpriteByWidth(sprite, colGap * fp[1]);
-        sprite.scale.set(sprite.scale.x * renderScale, sprite.scale.y * renderScale);
-
         const maxRow = Math.max(0, garden.rows - 1);
         const rowDistanceToBack = maxRow - cell.row;
         const depth = Math.max(0.55, 1 - rowDistanceToBack * DEPTH_K);
@@ -538,3 +533,5 @@ export function FrontView({
 
   return <div ref={mountRef} style={{ width: canvasWidth, minHeight: canvasH }} />;
 }
+
+
