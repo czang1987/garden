@@ -253,20 +253,6 @@ export default function App() {
 
   function canPlaceAtSelected(v: PlantVariant) {
     if (!selectedCell) return false;
-    if (
-      !heightFitsRow(
-        v.baseHeight,
-        selectedCell.r,
-        garden.rows,
-        frontMinHeight,
-        backMinHeight,
-        frontMaxHeight,
-        backMaxHeight
-      )
-    ) {
-      return false;
-    }
-
     const freed = selectedPlantFreedCells();
     const fp = (v.footprint ?? [1, 1]) as [number, number];
 
@@ -279,22 +265,6 @@ export default function App() {
 
   function disabledReason(v: PlantVariant) {
     if (!selectedCell) return "请先点击一个位置";
-    if (
-      !heightFitsRow(
-        v.baseHeight,
-        selectedCell.r,
-        garden.rows,
-        frontMinHeight,
-        backMinHeight,
-        frontMaxHeight,
-        backMaxHeight
-      )
-    ) {
-      const minH = Math.round(minHeightForRow(selectedCell.r, garden.rows, frontMinHeight, backMinHeight));
-      const maxH = Math.round(maxHeightForRow(selectedCell.r, garden.rows, frontMaxHeight, backMaxHeight));
-      return `当前行允许高度 ${minH}-${maxH}`;
-    }
-
     const freed = selectedPlantFreedCells();
     const fp = (v.footprint ?? [1, 1]) as [number, number];
 

@@ -198,8 +198,8 @@ async function drawMulchPerCell(
     width: gridW + 2,
     height: gridH + 2,
   });
-  tile.tileScale.x = colGap / safeTexture.width;
-  tile.tileScale.y = rowGap / safeTexture.height;
+  tile.tileScale.x = (colGap * 4) / safeTexture.width;
+  tile.tileScale.y = (rowGap * 4) / safeTexture.height;
   tile.position.set(Math.floor(baseX) - 1, Math.floor(baseY) - 1);
   tile.tilePosition.set(
     -Math.floor(seededRandom(seed + 2) * safeTexture.width),
@@ -568,14 +568,14 @@ export function FrontView({
         drawOccupiedCells(debugGridLayer, garden.cells, variantMap, rowGap, colGap, baseX, baseY, garden.rows, garden.cols);
       }
 
-      if (SHOW_DEBUG_GRID || showEditGrid) {
+      if (SHOW_DEBUG_GRID) {
         drawDebugGrid(debugGridLayer, garden.rows, garden.cols, rowGap, colGap, baseX, baseY);
-        if (showEditGrid && selectedCell) {
-          const selectedOutline = new PIXI.Graphics()
-            .rect(baseX + selectedCell.c * colGap, baseY + selectedCell.r * rowGap, colGap, rowGap)
-            .stroke({ color: 0xffffff, width: 3, alpha: 1 });
-          debugGridLayer.addChild(selectedOutline);
-        }
+      }
+      if (showEditGrid && selectedCell) {
+        const selectedOutline = new PIXI.Graphics()
+          .rect(baseX + selectedCell.c * colGap, baseY + selectedCell.r * rowGap, colGap, rowGap)
+          .stroke({ color: 0xffffff, width: 3, alpha: 1 });
+        debugGridLayer.addChild(selectedOutline);
       }
 
       for (const cell of garden.cells) {
