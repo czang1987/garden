@@ -225,6 +225,44 @@ function addPaperOverlay(scene: PIXI.Container, width: number, height: number) {
   scene.addChild(overlay);
 }
 
+function drawSkyBackdrop(
+  layer: PIXI.Container,
+  baseX: number,
+  baseY: number,
+  gridW: number,
+  frame: number
+) {
+  const skyWidth = gridW + frame * 2;
+  const skyHeight = Math.max(60, baseY - frame);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(skyWidth));
+  canvas.height = Math.max(1, Math.round(skyHeight));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, "#d9efff");
+  gradient.addColorStop(0.58, "#eef8ff");
+  gradient.addColorStop(1, "#fff6ea");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const haze = ctx.createLinearGradient(0, canvas.height * 0.55, 0, canvas.height);
+  haze.addColorStop(0, "rgba(255,255,255,0)");
+  haze.addColorStop(1, "rgba(255,248,235,0.8)");
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55);
+
+  const texture = PIXI.Texture.from(canvas);
+  const sky = new PIXI.Sprite(texture);
+  sky.position.set(baseX - frame, 0);
+  sky.width = skyWidth;
+  sky.height = skyHeight;
+  sky.zIndex = -1;
+  layer.addChild(sky);
+}
+
 function drawDebugGrid(
   layer: PIXI.Container,
   rows: number,
@@ -508,16 +546,19 @@ export function FrontView({
       scene.removeChildren();
       app.renderer.resize(canvasWidth, canvasH);
 
+      const skyLayer = new PIXI.Container();
       const bgLayer = new PIXI.Container();
       const frameLayer = new PIXI.Container();
       const debugGridLayer = new PIXI.Container();
       const plantLayer = new PIXI.Container();
+      skyLayer.zIndex = -5;
       bgLayer.zIndex = 0;
       frameLayer.zIndex = 5;
       debugGridLayer.zIndex = 6;
       plantLayer.zIndex = 10;
-      scene.addChild(frameLayer, bgLayer, debugGridLayer, plantLayer);
+      scene.addChild(skyLayer, frameLayer, bgLayer, debugGridLayer, plantLayer);
 
+      drawSkyBackdrop(skyLayer, baseX, baseY, gridW, FRAME);
       await drawBrickFrameEdges(frameLayer, gridW, gridH, baseX, baseY, rowGap, colGap, FRAME);
       await drawMulchPerCell(bgLayer, garden, rowGap, colGap, baseX, baseY);
 

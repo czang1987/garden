@@ -104,15 +104,16 @@ export default function App() {
 
     for (const cell of state.cells) {
       if (!cell.plant || cell.plant === "empty") continue;
-      if (cell.row !== selectedCell.r) continue;
       const variant = allVariants.find((v) => v.id === cell.plant);
       const fp = (variant?.footprint ?? [1, 1]) as [number, number];
-      if (selectedCell.c < cell.col || selectedCell.c >= cell.col + fp[1]) continue;
-      return {
-        anchor: cell,
-        variant,
-        footprint: fp,
-      };
+      const covered = footprintCells({ r: cell.row, c: cell.col }, fp);
+      if (covered.some((occupiedCell) => occupiedCell.r === selectedCell.r && occupiedCell.c === selectedCell.c)) {
+        return {
+          anchor: cell,
+          variant,
+          footprint: fp,
+        };
+      }
     }
 
     return null;
