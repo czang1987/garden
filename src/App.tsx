@@ -140,6 +140,7 @@ export default function App() {
   const [backMinHeight, setBackMinHeight] = useState(36);
   const [frontMaxHeight, setFrontMaxHeight] = useState(36);
   const [backMaxHeight, setBackMaxHeight] = useState(96);
+  const [rightPanel, setRightPanel] = useState<"catalog" | "auto">("catalog");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -480,9 +481,6 @@ export default function App() {
           />
         </label>
         <button onClick={applySize}>应用</button>
-        <button onClick={autoGenerate} disabled={allVariants.length === 0}>
-          自动生成布局
-        </button>
         <button onClick={clearAllPlants}>清空全部植物</button>
         <button onClick={exportLayout}>导出布局文件</button>
         <button onClick={triggerImport}>导入布局文件</button>
@@ -493,25 +491,6 @@ export default function App() {
           onChange={onImportFile}
           style={{ display: "none" }}
         />
-        <div
-          style={{
-            marginLeft: 12,
-            padding: "6px 10px",
-            border: "1px solid #ddd",
-            borderRadius: 8,
-            background: "#fafafa",
-            minWidth: 220,
-            fontSize: 12,
-            lineHeight: 1.6,
-          }}
-        >
-          <div style={{ fontWeight: 700 }}>布局评分: {layoutScore.total}/100</div>
-          <div>覆盖度: {layoutScore.breakdown.coverage}</div>
-          <div>多样性: {layoutScore.breakdown.diversity}</div>
-          <div>当季花期: {layoutScore.breakdown.seasonalBloom}</div>
-          <div>维护成本: {layoutScore.breakdown.maintenance}</div>
-          <div>邻接关系: {layoutScore.breakdown.adjacency}</div>
-        </div>
       </div>
 
       <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -533,37 +512,6 @@ export default function App() {
         <span style={{ fontSize: 12, color: "#666" }}>
           COL_GAP: {colGap} / ROW_GAP: {rowGap}
         </span>
-      </div>
-
-      <div style={{ marginBottom: 16, display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-            Min Height: {frontMinHeight} - {backMinHeight}
-          </div>
-          <DualSlider
-            min={0}
-            max={120}
-            step={1}
-            leftValue={frontMinHeight}
-            rightValue={backMinHeight}
-            onLeftChange={setFrontMinHeight}
-            onRightChange={setBackMinHeight}
-          />
-        </div>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-            Max Height: {frontMaxHeight} - {backMaxHeight}
-          </div>
-          <DualSlider
-            min={0}
-            max={160}
-            step={1}
-            leftValue={frontMaxHeight}
-            rightValue={backMaxHeight}
-            onLeftChange={(value) => setFrontMaxHeight(Math.max(value, frontMinHeight))}
-            onRightChange={(value) => setBackMaxHeight(Math.max(value, backMinHeight))}
-          />
-        </div>
       </div>
 
       {selectedCell ? (
@@ -633,24 +581,69 @@ export default function App() {
           }}
         >
           <div style={{ width: "100%" }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
-              {selectedCell ? `选中位置: (${selectedCell.r}, ${selectedCell.c})` : "请选择一个格子"}
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <button
+                onClick={() => setRightPanel("catalog")}
+                style={{
+                  flex: 1,
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  border: rightPanel === "catalog" ? "1px solid #5f7a61" : "1px solid #d9d9d9",
+                  background: rightPanel === "catalog" ? "#eef6ee" : "#fff",
+                }}
+              >
+                选植物
+              </button>
+              <button
+                onClick={() => setRightPanel("auto")}
+                style={{
+                  flex: 1,
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  border: rightPanel === "auto" ? "1px solid #5f7a61" : "1px solid #d9d9d9",
+                  background: rightPanel === "auto" ? "#eef6ee" : "#fff",
+                }}
+              >
+                自动生成植物
+              </button>
             </div>
-            {categories.length > 0 ? (
-              <PlantCatalog
-                categories={categories}
-                hasSelection={!!selectedCell}
-                onClear={() => choosePlant(null)}
-                canSelectVariant={canPlaceAtSelected}
-                disabledReason={disabledReason}
-                onSelectVariant={(v) => choosePlant(v.id)}
-                panelWidth={catalogPaneWidth}
-              />
+            {rightPanel === "catalog" ? (
+              <>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+                  {selectedCell ? `选中位置: (${selectedCell.r}, ${selectedCell.c})` : "请选择一个格子"}
+                </div>
+                {categories.length > 0 ? (
+                  <PlantCatalog
+                    categories={categories}
+                    hasSelection={!!selectedCell}
+                    onClear={() => choosePlant(null)}
+                    canSelectVariant={canPlaceAtSelected}
+                    disabledReason={disabledReason}
+                    onSelectVariant={(v) => choosePlant(v.id)}
+                    panelWidth={catalogPaneWidth}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: "100%",
+                      minHeight: 420,
+                      border: "1px solid #e2ddd2",
+                      borderRadius: 14,
+                      background: "#faf7f1",
+                      padding: 16,
+                      color: "#766a58",
+                      fontSize: 13,
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    正在加载植物目录。
+                  </div>
+                )}
+              </>
             ) : (
               <div
                 style={{
                   width: "100%",
-                  minHeight: 420,
                   border: "1px solid #e2ddd2",
                   borderRadius: 14,
                   background: "#faf7f1",
@@ -660,7 +653,65 @@ export default function App() {
                   lineHeight: 1.7,
                 }}
               >
-                正在加载植物目录。
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#2f3d2f", marginBottom: 12 }}>
+                  自动生成植物
+                </div>
+                <button
+                  onClick={autoGenerate}
+                  disabled={allVariants.length === 0}
+                  style={{ width: "100%", padding: "10px 12px", marginBottom: 14, borderRadius: 10 }}
+                >
+                  自动生成布局
+                </button>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                    Min Height: {frontMinHeight} - {backMinHeight}
+                  </div>
+                  <DualSlider
+                    min={0}
+                    max={120}
+                    step={1}
+                    leftValue={frontMinHeight}
+                    rightValue={backMinHeight}
+                    onLeftChange={setFrontMinHeight}
+                    onRightChange={setBackMinHeight}
+                    width={catalogPaneWidth - 32}
+                  />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                    Max Height: {frontMaxHeight} - {backMaxHeight}
+                  </div>
+                  <DualSlider
+                    min={0}
+                    max={160}
+                    step={1}
+                    leftValue={frontMaxHeight}
+                    rightValue={backMaxHeight}
+                    onLeftChange={(value) => setFrontMaxHeight(Math.max(value, frontMinHeight))}
+                    onRightChange={(value) => setBackMaxHeight(Math.max(value, backMinHeight))}
+                    width={catalogPaneWidth - 32}
+                  />
+                </div>
+                {selectedCell ? (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: "#4f5f4f",
+                      background: "#f5f8f2",
+                      border: "1px solid #d7e2d1",
+                      borderRadius: 8,
+                      padding: "8px 10px",
+                    }}
+                  >
+                    当前选中行允许高度:{" "}
+                    {Math.round(minHeightForRow(selectedCell.r, garden.rows, frontMinHeight, backMinHeight))}
+                    {" - "}
+                    {Math.round(maxHeightForRow(selectedCell.r, garden.rows, frontMaxHeight, backMaxHeight))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: "#666" }}>请选择一个格子查看当前行的允许高度。</div>
+                )}
               </div>
             )}
           </div>

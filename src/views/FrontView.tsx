@@ -564,7 +564,7 @@ export function FrontView({
       await drawBrickFrameEdges(frameLayer, gridW, gridH, baseX, baseY, rowGap, colGap, FRAME);
       await drawMulchPerCell(bgLayer, garden, rowGap, colGap, baseX, baseY);
 
-      if (SHOW_DEBUG_OCCUPIED_CELLS) {
+      if (SHOW_DEBUG_OCCUPIED_CELLS && showEditGrid) {
         drawOccupiedCells(debugGridLayer, garden.cells, variantMap, rowGap, colGap, baseX, baseY, garden.rows, garden.cols);
       }
 
