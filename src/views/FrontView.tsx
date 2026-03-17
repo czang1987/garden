@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 import type { GardenState } from "../store/garden";
 
@@ -6,9 +6,10 @@ const DEFAULT_ROW_GAP = 85;
 const BASE_HEIGHT_UNIT_SCALE = 2;
 const SHOW_DEBUG_GRID = false;
 const SHOW_DEBUG_PLANT_BOUNDS = false;
+const SHOW_DEBUG_OCCUPIED_CELLS = true;
 const ENABLE_SWAY = true;
 const FRAME = 36;
-const DEPTH_K = 0.03;
+const DEPTH_K = 0.003;
 
 type PlantVariant = {
   id: string;
@@ -240,6 +241,36 @@ function drawDebugGrid(
   layer.addChild(g);
 }
 
+function drawOccupiedCells(
+  layer: PIXI.Container,
+  cells: GardenState["cells"],
+  variantMap: Map<string, PlantVariant>,
+  rowGap: number,
+  colGap: number,
+  baseX: number,
+  baseY: number,
+  rows: number,
+  cols: number
+) {
+  const g = new PIXI.Graphics();
+  for (const cell of cells) {
+    if (!cell.plant || cell.plant === "empty") continue;
+    const fp = (variantMap.get(cell.plant)?.footprint ?? [1, 1]) as [number, number];
+    for (let dr = 0; dr < fp[0]; dr++) {
+      for (let dc = 0; dc < fp[1]; dc++) {
+        const rr = cell.row - dr;
+        const cc = cell.col + dc;
+        if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue;
+        g.rect(baseX + cc * colGap, baseY + rr * rowGap, colGap, rowGap).fill({
+          color: 0x9a9a9a,
+          alpha: 0.32,
+        });
+      }
+    }
+  }
+  layer.addChild(g);
+}
+
 export function FrontView({
   garden,
   colGap = 110,
@@ -423,6 +454,10 @@ export function FrontView({
 
       await drawBrickFrameEdges(frameLayer, gridW, gridH, baseX, baseY, rowGap, colGap, FRAME);
       await drawMulchPerCell(bgLayer, garden, rowGap, colGap, baseX, baseY);
+
+      if (SHOW_DEBUG_OCCUPIED_CELLS) {
+        drawOccupiedCells(debugGridLayer, garden.cells, variantMap, rowGap, colGap, baseX, baseY, garden.rows, garden.cols);
+      }
 
       if (SHOW_DEBUG_GRID || showEditGrid) {
         drawDebugGrid(debugGridLayer, garden.rows, garden.cols, rowGap, colGap, baseX, baseY);

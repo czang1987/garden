@@ -23,7 +23,7 @@ function buildLockGrid(garden: GardenState, variants: PlantVariant[]) {
     const fp = (variantMap.get(cell.plant)?.footprint ?? [1, 1]) as [number, number];
     for (let dr = 0; dr < fp[0]; dr++) {
       for (let dc = 0; dc < fp[1]; dc++) {
-        const rr = cell.row + dr;
+        const rr = cell.row - dr;
         const cc = cell.col + dc;
         if (rr >= 0 && rr < garden.rows && cc >= 0 && cc < garden.cols) {
           out[rr][cc] = true;
@@ -91,7 +91,7 @@ export default function TopView({
     const cells: RC[] = [];
     for (let dr = 0; dr < h; dr++) {
       for (let dc = 0; dc < w; dc++) {
-        cells.push({ r: anchor.r + dr, c: anchor.c + dc });
+        cells.push({ r: anchor.r - dr, c: anchor.c + dc });
       }
     }
     return cells;
@@ -117,7 +117,7 @@ export default function TopView({
     // 以 selectedCell 作为 anchor（左上角）
     for (let dr = 0; dr < h; dr++) {
       for (let dc = 0; dc < w; dc++) {
-        const rr = selectedCell.r + dr;
+        const rr = selectedCell.r - dr;
         const cc = selectedCell.c + dc;
         console.log(rr,cc,garden.rows,garden.cols)
         if (!inBounds(garden,rr, cc)){
@@ -138,7 +138,7 @@ function disabledReason(v: PlantVariant) {
 
   for (let dr = 0; dr < h; dr++) {
     for (let dc = 0; dc < w; dc++) {
-      const rr = selectedCell.r + dr;
+      const rr = selectedCell.r - dr;
       const cc = selectedCell.c + dc;
 
       if (!inBounds(garden,rr, cc)) return "边缘位置放不下";

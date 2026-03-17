@@ -18,7 +18,7 @@ function buildLockGrid(garden: GardenState, variants: PlantVariant[]) {
     const fp = (variantMap.get(cell.plant)?.footprint ?? [1, 1]) as [number, number];
     for (let dr = 0; dr < fp[0]; dr++) {
       for (let dc = 0; dc < fp[1]; dc++) {
-        const rr = cell.row + dr;
+        const rr = cell.row - dr;
         const cc = cell.col + dc;
         if (rr >= 0 && rr < garden.rows && cc >= 0 && cc < garden.cols) {
           out[rr][cc] = true;
@@ -122,7 +122,7 @@ export default function App() {
     const cells: { r: number; c: number }[] = [];
     for (let dr = 0; dr < h; dr++) {
       for (let dc = 0; dc < w; dc++) {
-        cells.push({ r: anchor.r + dr, c: anchor.c + dc });
+        cells.push({ r: anchor.r - dr, c: anchor.c + dc });
       }
     }
     return cells;
