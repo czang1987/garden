@@ -9,7 +9,7 @@
           "id": "rose_knockout_red",
           "name": "Knock Out（红）",
           "icon": "/assets/plants/rose_knockout_red/icon.png",
-          "link": "https://www.homedepot.com/p/KNOCK-OUT-2-gal-Red-Double-Knock-Out-Rose-With-Red-Flowers-HD3159/339238374",
+          "link": "https://www.lowes.com/pd/Knockout-Roses-1-Gal-Rose-KO-Double-Red/5015643585",
           "baseHeight": 48,
           "baseWidth": 48,
           "zone": "5-11",
@@ -40,8 +40,8 @@
           "baseWidth": 36,
           "zone": "5-9",
           "footprint": [
-            4,
-            4
+            3,
+            3
           ],
           "tags": [
             "白",
@@ -71,7 +71,7 @@
           "baseHeight": 72,
           "baseWidth": 72,
           "footprint": [
-            4,
+            8,
             8
           ],
           "tags": [
@@ -94,7 +94,7 @@
           "baseHeight": 84,
           "baseWidth": 84,
           "footprint": [
-            4,
+            8,
             8
           ],
           "tags": [
@@ -126,8 +126,8 @@
           "baseHeight": 10,
           "baseWidth": 6,
           "footprint": [
-            4,
-            4
+            2,
+            2
           ],
           "tags": [
             "红",
@@ -156,8 +156,8 @@
           "baseHeight": 30,
           "zone": "4-8",
           "footprint": [
-            4,
-            4
+            3,
+            3
           ],
           "tags": [
             "紫",
@@ -236,8 +236,8 @@
           "baseWidth": 18,
           "zone": "3-9",
           "footprint": [
-            4,
-            4
+            2,
+            2
           ],
           "tags": [
             "传粉友好",
@@ -261,8 +261,8 @@
           "baseHeight": 24,
           "baseWidth": 12,
           "footprint": [
-            4,
-            4
+            2,
+            2
           ],
           "tags": [
             "耐热",
@@ -286,8 +286,8 @@
           "baseHeight": 24,
           "zone": "3-8",
           "footprint": [
-            4,
-            4
+            2,
+            2
           ],
           "tags": [
             "耐阴",
@@ -310,8 +310,8 @@
           "baseWidth": 36,
           "zone": "3-8",
           "footprint": [
-            4,
-            4
+            3,
+            3
           ],
           "tags": [
             "大花",
