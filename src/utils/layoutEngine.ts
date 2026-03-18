@@ -1,6 +1,6 @@
 import type { GardenState } from "../store/garden";
 import type { PlantVariant } from "../type/plants";
-import { canPlaceFootprint, footprintBounds, markFootprint } from "./footprint";
+import { canPlaceFootprint, footprintBounds, footprintCells, markFootprint } from "./footprint";
 
 type ScoreBreakdown = {
   coverage: number;
@@ -23,7 +23,14 @@ type EngineOptions = {
   frontMaxHeight?: number;
   backMaxHeight?: number;
   heightGradientStrength?: number;
+  frontDensity?: number;
+  middleDensity?: number;
+  backDensity?: number;
 };
+
+type DensityBand = "front" | "middle" | "back";
+
+type BandCounts = Record<DensityBand, number>;
 
 type Placed = {
   r: number;
@@ -109,6 +116,97 @@ export function prunePlantsByHeightRange(
   };
 }
 
+export function prunePlantsByDensityTargets(
+  garden: GardenState,
+  variants: PlantVariant[],
+  frontDensity: number,
+  middleDensity: number,
+  backDensity: number,
+  preferredBand?: DensityBand
+) {
+  const variantMap = new Map(variants.map((v) => [v.id, v] as const));
+  const targetByBand: BandCounts = {
+    front: clamp01(frontDensity),
+    middle: clamp01(middleDensity),
+    back: clamp01(backDensity),
+  };
+  const totalByBand = totalCellsByBand(garden.rows, garden.cols);
+  const maxByBand: BandCounts = {
+    front: Math.floor(totalByBand.front * targetByBand.front),
+    middle: Math.floor(totalByBand.middle * targetByBand.middle),
+    back: Math.floor(totalByBand.back * targetByBand.back),
+  };
+
+  const anchors = garden.cells
+    .filter((cell) => cell.plant && cell.plant !== "empty")
+    .map((cell) => {
+      const variant = variantMap.get(cell.plant);
+      if (!variant) return null;
+      const fp = (variant.footprint ?? [1, 1]) as [number, number];
+      return {
+        row: cell.row,
+        col: cell.col,
+        id: cell.plant,
+        counts: footprintBandCounts({ r: cell.row, c: cell.col }, fp, garden.rows),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => !!item);
+
+  const usedByBand = emptyBandCounts();
+  for (const anchor of anchors) addBandCounts(usedByBand, anchor.counts);
+
+  const next: GardenState = {
+    ...garden,
+    cells: garden.cells.map((cell) => ({ ...cell })),
+  };
+
+  while (
+    usedByBand.front > maxByBand.front ||
+    usedByBand.middle > maxByBand.middle ||
+    usedByBand.back > maxByBand.back
+  ) {
+    const overByBand: BandCounts = {
+      front: usedByBand.front - maxByBand.front,
+      middle: usedByBand.middle - maxByBand.middle,
+      back: usedByBand.back - maxByBand.back,
+    };
+    const band =
+      preferredBand && overByBand[preferredBand] > 0
+        ? preferredBand
+        : (["front", "middle", "back"] as DensityBand[]).reduce((best, current) =>
+            overByBand[current] > overByBand[best] ? current : best
+          );
+    if (overByBand[band] <= 0) break;
+
+    let chosenIndex = -1;
+    let chosenScore = -1;
+    for (let i = 0; i < anchors.length; i++) {
+      const candidate = anchors[i];
+      if (candidate.counts[band] <= 0) continue;
+      const score =
+        candidate.counts[band] * 1000 +
+        candidate.counts.front +
+        candidate.counts.middle +
+        candidate.counts.back;
+      if (score > chosenScore || (score === chosenScore && Math.random() < 0.5)) {
+        chosenScore = score;
+        chosenIndex = i;
+      }
+    }
+    if (chosenIndex < 0) break;
+
+    const [removed] = anchors.splice(chosenIndex, 1);
+    usedByBand.front -= removed.counts.front;
+    usedByBand.middle -= removed.counts.middle;
+    usedByBand.back -= removed.counts.back;
+
+    const cell = next.cells.find((item) => item.row === removed.row && item.col === removed.col);
+    if (cell) cell.plant = "empty";
+  }
+
+  return next;
+}
+
 function seededRandom(seed: number) {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
@@ -121,6 +219,69 @@ function makeShuffled<T>(arr: T[], seed: number): T[] {
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
+}
+
+function emptyBandCounts(): BandCounts {
+  return { front: 0, middle: 0, back: 0 };
+}
+
+function rowBand(row: number, rows: number): DensityBand {
+  if (rows <= 1) return "front";
+  const t = clamp01(row / (rows - 1));
+  if (t < 1 / 3) return "back";
+  if (t < 2 / 3) return "middle";
+  return "front";
+}
+
+function totalCellsByBand(rows: number, cols: number): BandCounts {
+  const counts = emptyBandCounts();
+  for (let r = 0; r < rows; r++) counts[rowBand(r, rows)] += cols;
+  return counts;
+}
+
+function footprintBandCounts(anchor: { r: number; c: number }, fp: [number, number], rows: number): BandCounts {
+  const counts = emptyBandCounts();
+  for (const cell of footprintCells(anchor, fp)) {
+    if (cell.r < 0 || cell.r >= rows) continue;
+    counts[rowBand(cell.r, rows)] += 1;
+  }
+  return counts;
+}
+
+function addBandCounts(target: BandCounts, added: BandCounts) {
+  target.front += added.front;
+  target.middle += added.middle;
+  target.back += added.back;
+}
+
+function bandTargetsMet(used: BandCounts, total: BandCounts, target: BandCounts) {
+  return (
+    used.front >= Math.floor(total.front * target.front) &&
+    used.middle >= Math.floor(total.middle * target.middle) &&
+    used.back >= Math.floor(total.back * target.back)
+  );
+}
+
+function densityFactor(
+  current: BandCounts,
+  added: BandCounts,
+  total: BandCounts,
+  target: BandCounts
+) {
+  let factor = 1;
+  for (const band of ["front", "middle", "back"] as DensityBand[]) {
+    if (added[band] <= 0) continue;
+    const totalCells = Math.max(1, total[band]);
+    const nextRatio = (current[band] + added[band]) / totalCells;
+    const targetRatio = clamp01(target[band]);
+    if (nextRatio <= targetRatio) {
+      factor *= 1 + (targetRatio - nextRatio) * 0.8;
+    } else {
+      const overflow = nextRatio - targetRatio;
+      factor *= Math.max(0.05, 1 - overflow * 3);
+    }
+  }
+  return factor;
 }
 
 export function relativeHeightFactor(
@@ -195,7 +356,10 @@ function pickWeighted(
   backMinHeight: number,
   frontMaxHeight: number,
   backMaxHeight: number,
-  heightGradientStrength: number
+  heightGradientStrength: number,
+  occupiedByBand: BandCounts,
+  totalByBand: BandCounts,
+  targetByBand: BandCounts
 ) {
   if (variants.length === 0) return null;
   const weightedCandidates = variants.map((v, i) => {
@@ -210,6 +374,9 @@ function pickWeighted(
     )
       ? 1
       : 0;
+    const fp = (v.footprint ?? [1, 1]) as [number, number];
+    const addedByBand = footprintBandCounts({ r: candidateRow, c: candidateCol }, fp, rows);
+    const bandDensityFactor = densityFactor(occupiedByBand, addedByBand, totalByBand, targetByBand);
     const placementFactor = relativeHeightFactor(
       v,
       candidateRow,
@@ -222,8 +389,9 @@ function pickWeighted(
     return {
       variant: v,
       heightFactor,
+      bandDensityFactor,
       placementFactor,
-      weight: base * placementFactor * heightFactor,
+      weight: base * placementFactor * heightFactor * bandDensityFactor,
     };
   });
   const sum = weightedCandidates.reduce((a, b) => a + b.weight, 0);
@@ -271,6 +439,12 @@ export function generateAutoLayout(
   const total = rows * cols;
   const targetCoverage = clamp01(options.targetCoverage ?? 0.62);
   const targetOccupiedCells = Math.max(1, Math.floor(total * targetCoverage));
+  const targetByBand: BandCounts = {
+    front: clamp01(options.frontDensity ?? targetCoverage),
+    middle: clamp01(options.middleDensity ?? targetCoverage),
+    back: clamp01(options.backDensity ?? targetCoverage),
+  };
+  const totalByBand = totalCellsByBand(rows, cols);
 
   const next: GardenState = {
     ...base,
@@ -288,6 +462,7 @@ export function generateAutoLayout(
 
   const placed: Placed[] = [];
   let used = 0;
+  const occupiedByBand = emptyBandCounts();
 
   for (const cell of next.cells) {
     if (!cell.plant || cell.plant === "empty") continue;
@@ -310,11 +485,12 @@ export function generateAutoLayout(
     if (!canPlaceFootprint(occupied, rows, cols, { r: cell.row, c: cell.col }, fp)) continue;
     markFootprint(occupied, { r: cell.row, c: cell.col }, fp);
     used += fp[0] * fp[1];
+    addBandCounts(occupiedByBand, footprintBandCounts({ r: cell.row, c: cell.col }, fp, rows));
     placed.push({ r: cell.row, c: cell.col, id: cell.plant });
   }
 
   let idx = 0;
-  while (idx < shuffled.length && used < targetOccupiedCells) {
+  while (idx < shuffled.length && used < targetOccupiedCells && !bandTargetsMet(occupiedByBand, totalByBand, targetByBand)) {
     const { r, c } = shuffled[idx++];
     if (occupied[r][c]) continue;
 
@@ -330,7 +506,10 @@ export function generateAutoLayout(
       backMinHeight,
       frontMaxHeight,
       backMaxHeight,
-      heightGradientStrength
+      heightGradientStrength,
+      occupiedByBand,
+      totalByBand,
+      targetByBand
     );
     if (!chosen) break;
     const fp = (chosen.footprint ?? [1, 1]) as [number, number];
@@ -338,6 +517,7 @@ export function generateAutoLayout(
     if (!canPlaceFootprint(occupied, rows, cols, { r, c }, fp)) continue;
     markFootprint(occupied, { r, c }, fp);
     used += fp[0] * fp[1];
+    addBandCounts(occupiedByBand, footprintBandCounts({ r, c }, fp, rows));
     placed.push({ r, c, id: chosen.id });
   }
 

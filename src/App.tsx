@@ -9,6 +9,7 @@ import {
   heightFitsRow,
   maxHeightForRow,
   minHeightForRow,
+  prunePlantsByDensityTargets,
   prunePlantsByHeightRange,
   relativeHeightFactor,
   scoreLayout,
@@ -141,6 +142,10 @@ export default function App() {
   const [frontMaxHeight, setFrontMaxHeight] = useState(36);
   const [backMaxHeight, setBackMaxHeight] = useState(96);
   const [heightGradientStrength, setHeightGradientStrength] = useState(0.5);
+  const [frontDensity, setFrontDensity] = useState(0.62);
+  const [middleDensity, setMiddleDensity] = useState(0.62);
+  const [backDensity, setBackDensity] = useState(0.62);
+  const [lastDensityBand, setLastDensityBand] = useState<"front" | "middle" | "back" | null>(null);
   const [rightPanel, setRightPanel] = useState<"catalog" | "auto">("catalog");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -207,6 +212,26 @@ export default function App() {
 
   const occupancy = useMemo(() => buildOccupancyGrid(garden, allVariants), [garden, allVariants]);
   const layoutScore = useMemo(() => scoreLayout(garden, allVariants), [garden, allVariants]);
+  const densityStats = useMemo(() => {
+    const counts = {
+      front: { used: 0, total: 0 },
+      middle: { used: 0, total: 0 },
+      back: { used: 0, total: 0 },
+    };
+    for (let r = 0; r < garden.rows; r++) {
+      const t = garden.rows <= 1 ? 1 : r / (garden.rows - 1);
+      const band = t < 1 / 3 ? "back" : t < 2 / 3 ? "middle" : "front";
+      for (let c = 0; c < garden.cols; c++) {
+        counts[band].total += 1;
+        if (occupancy[r]?.[c]) counts[band].used += 1;
+      }
+    }
+    return {
+      front: counts.front.total ? counts.front.used / counts.front.total : 0,
+      middle: counts.middle.total ? counts.middle.used / counts.middle.total : 0,
+      back: counts.back.total ? counts.back.used / counts.back.total : 0,
+    };
+  }, [garden.cols, garden.rows, occupancy]);
 
   const canvasWidth = Math.max(520, frontPaneWidth - 4);
   const frameThickness = 36;
@@ -345,6 +370,9 @@ export default function App() {
         frontMaxHeight,
         backMaxHeight,
         heightGradientStrength,
+        frontDensity,
+        middleDensity,
+        backDensity,
       })
     );
     setEditMode(false);
@@ -429,6 +457,19 @@ export default function App() {
       )
     );
   }, [allVariants, backMaxHeight, backMinHeight, frontMaxHeight, frontMinHeight]);
+
+  useEffect(() => {
+    setGarden((prev) =>
+      prunePlantsByDensityTargets(
+        prev,
+        allVariants,
+        frontDensity,
+        middleDensity,
+        backDensity,
+        lastDensityBand ?? undefined
+      )
+    );
+  }, [allVariants, backDensity, frontDensity, lastDensityBand, middleDensity]);
 
   return (
     <div style={{ padding: 16, maxWidth: 1800, margin: "0 auto" }}>
@@ -677,6 +718,60 @@ export default function App() {
                     step={0.01}
                     value={heightGradientStrength}
                     onChange={(e) => setHeightGradientStrength(Number(e.target.value))}
+                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
+                  />
+                </div>
+                <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: "#2f3d2f" }}>
+                  前中后排密度
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, marginBottom: 4 }}>
+                    Front Density: {densityStats.front.toFixed(2)} / {frontDensity.toFixed(2)}
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={frontDensity}
+                    onChange={(e) => {
+                      setLastDensityBand("front");
+                      setFrontDensity(Number(e.target.value));
+                    }}
+                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
+                  />
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, marginBottom: 4 }}>
+                    Middle Density: {densityStats.middle.toFixed(2)} / {middleDensity.toFixed(2)}
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={middleDensity}
+                    onChange={(e) => {
+                      setLastDensityBand("middle");
+                      setMiddleDensity(Number(e.target.value));
+                    }}
+                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
+                  />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, marginBottom: 4 }}>
+                    Back Density: {densityStats.back.toFixed(2)} / {backDensity.toFixed(2)}
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={backDensity}
+                    onChange={(e) => {
+                      setLastDensityBand("back");
+                      setBackDensity(Number(e.target.value));
+                    }}
                     style={{ width: Math.max(120, catalogPaneWidth - 32) }}
                   />
                 </div>
