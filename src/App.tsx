@@ -3,10 +3,10 @@ import PlantCatalog from "./components/PlantCatalog";
 import { FrontView } from "./views/FrontView";
 import { createGarden, resizeGarden } from "./store/garden";
 import type { GardenState, Season } from "./store/garden";
+import { DEFAULT_DESIGN_INTENT, type DesignIntent } from "./type/designIntent";
 import type { PlantCatalogData, PlantCategory, PlantVariant } from "./type/plants";
 import {
   generateAutoLayout,
-  heightFitsRow,
   maxHeightForRow,
   minHeightForRow,
   prunePlantsByDensityTargets,
@@ -137,14 +137,7 @@ export default function App() {
   const [editMode, setEditMode] = useState(false);
   const [frontPaneWidth, setFrontPaneWidth] = useState(960);
   const [catalogPaneWidth, setCatalogPaneWidth] = useState(320);
-  const [frontMinHeight, setFrontMinHeight] = useState(12);
-  const [backMinHeight, setBackMinHeight] = useState(36);
-  const [frontMaxHeight, setFrontMaxHeight] = useState(36);
-  const [backMaxHeight, setBackMaxHeight] = useState(96);
-  const [heightGradientStrength, setHeightGradientStrength] = useState(0.5);
-  const [frontDensity, setFrontDensity] = useState(0.62);
-  const [middleDensity, setMiddleDensity] = useState(0.62);
-  const [backDensity, setBackDensity] = useState(0.62);
+  const [designIntent, setDesignIntent] = useState<DesignIntent>(DEFAULT_DESIGN_INTENT);
   const [lastDensityBand, setLastDensityBand] = useState<"front" | "middle" | "back" | null>(null);
   const [rightPanel, setRightPanel] = useState<"catalog" | "auto">("catalog");
 
@@ -338,7 +331,7 @@ export default function App() {
           selectedCell.c,
           placed,
           variantMap,
-          heightGradientStrength
+          designIntent.height.gradientStrength
         );
         console.log("[manual-select] choose", {
           row: selectedCell.r,
@@ -365,14 +358,7 @@ export default function App() {
     setGarden((prev) =>
       generateAutoLayout(prev, allVariants, {
         targetCoverage: 0.62,
-        frontMinHeight,
-        backMinHeight,
-        frontMaxHeight,
-        backMaxHeight,
-        heightGradientStrength,
-        frontDensity,
-        middleDensity,
-        backDensity,
+        designIntent,
       })
     );
     setEditMode(false);
@@ -450,26 +436,21 @@ export default function App() {
       prunePlantsByHeightRange(
         prev,
         allVariants,
-        frontMinHeight,
-        backMinHeight,
-        frontMaxHeight,
-        backMaxHeight
+        designIntent
       )
     );
-  }, [allVariants, backMaxHeight, backMinHeight, frontMaxHeight, frontMinHeight]);
+  }, [allVariants, designIntent]);
 
   useEffect(() => {
     setGarden((prev) =>
       prunePlantsByDensityTargets(
         prev,
         allVariants,
-        frontDensity,
-        middleDensity,
-        backDensity,
+        designIntent,
         lastDensityBand ?? undefined
       )
     );
-  }, [allVariants, backDensity, frontDensity, lastDensityBand, middleDensity]);
+  }, [allVariants, designIntent, lastDensityBand]);
 
   return (
     <div style={{ padding: 16, maxWidth: 1800, margin: "0 auto" }}>
@@ -542,9 +523,23 @@ export default function App() {
           }}
         >
           当前选中行允许高度:{" "}
-          {Math.round(minHeightForRow(selectedCell.r, garden.rows, frontMinHeight, backMinHeight))}
+          {Math.round(
+            minHeightForRow(
+              selectedCell.r,
+              garden.rows,
+              designIntent.height.frontMin,
+              designIntent.height.backMin
+            )
+          )}
           {" - "}
-          {Math.round(maxHeightForRow(selectedCell.r, garden.rows, frontMaxHeight, backMaxHeight))}
+          {Math.round(
+            maxHeightForRow(
+              selectedCell.r,
+              garden.rows,
+              designIntent.height.frontMax,
+              designIntent.height.backMax
+            )
+          )}
         </div>
       ) : null}
 
@@ -679,45 +674,70 @@ export default function App() {
                 </button>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                    Min Height: {frontMinHeight} - {backMinHeight}
+                    Min Height: {designIntent.height.frontMin} - {designIntent.height.backMin}
                   </div>
                   <DualSlider
                     min={0}
                     max={120}
                     step={1}
-                    leftValue={frontMinHeight}
-                    rightValue={backMinHeight}
-                    onLeftChange={setFrontMinHeight}
-                    onRightChange={setBackMinHeight}
+                    leftValue={designIntent.height.frontMin}
+                    rightValue={designIntent.height.backMin}
+                    onLeftChange={(value) =>
+                      setDesignIntent((prev) => ({
+                        ...prev,
+                        height: { ...prev.height, frontMin: value },
+                      }))
+                    }
+                    onRightChange={(value) =>
+                      setDesignIntent((prev) => ({
+                        ...prev,
+                        height: { ...prev.height, backMin: value },
+                      }))
+                    }
                     width={catalogPaneWidth - 32}
                   />
                 </div>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                    Max Height: {frontMaxHeight} - {backMaxHeight}
+                    Max Height: {designIntent.height.frontMax} - {designIntent.height.backMax}
                   </div>
                   <DualSlider
                     min={0}
                     max={160}
                     step={1}
-                    leftValue={frontMaxHeight}
-                    rightValue={backMaxHeight}
-                    onLeftChange={(value) => setFrontMaxHeight(Math.max(value, frontMinHeight))}
-                    onRightChange={(value) => setBackMaxHeight(Math.max(value, backMinHeight))}
+                    leftValue={designIntent.height.frontMax}
+                    rightValue={designIntent.height.backMax}
+                    onLeftChange={(value) =>
+                      setDesignIntent((prev) => ({
+                        ...prev,
+                        height: { ...prev.height, frontMax: Math.max(value, prev.height.frontMin) },
+                      }))
+                    }
+                    onRightChange={(value) =>
+                      setDesignIntent((prev) => ({
+                        ...prev,
+                        height: { ...prev.height, backMax: Math.max(value, prev.height.backMin) },
+                      }))
+                    }
                     width={catalogPaneWidth - 32}
                   />
                 </div>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                    Height Gradient: {heightGradientStrength.toFixed(2)}
+                    Height Gradient: {designIntent.height.gradientStrength.toFixed(2)}
                   </div>
                   <input
                     type="range"
                     min={0}
                     max={1}
                     step={0.01}
-                    value={heightGradientStrength}
-                    onChange={(e) => setHeightGradientStrength(Number(e.target.value))}
+                    value={designIntent.height.gradientStrength}
+                    onChange={(e) =>
+                      setDesignIntent((prev) => ({
+                        ...prev,
+                        height: { ...prev.height, gradientStrength: Number(e.target.value) },
+                      }))
+                    }
                     style={{ width: Math.max(120, catalogPaneWidth - 32) }}
                   />
                 </div>
@@ -726,51 +746,60 @@ export default function App() {
                 </div>
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 12, marginBottom: 4 }}>
-                    Front Density: {densityStats.front.toFixed(2)} / {frontDensity.toFixed(2)}
+                    Front Density: {densityStats.front.toFixed(2)} / {designIntent.density.front.toFixed(2)}
                   </div>
                   <input
                     type="range"
                     min={0}
                     max={1}
                     step={0.01}
-                    value={frontDensity}
+                    value={designIntent.density.front}
                     onChange={(e) => {
                       setLastDensityBand("front");
-                      setFrontDensity(Number(e.target.value));
+                      setDesignIntent((prev) => ({
+                        ...prev,
+                        density: { ...prev.density, front: Number(e.target.value) },
+                      }));
                     }}
                     style={{ width: Math.max(120, catalogPaneWidth - 32) }}
                   />
                 </div>
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 12, marginBottom: 4 }}>
-                    Middle Density: {densityStats.middle.toFixed(2)} / {middleDensity.toFixed(2)}
+                    Middle Density: {densityStats.middle.toFixed(2)} / {designIntent.density.middle.toFixed(2)}
                   </div>
                   <input
                     type="range"
                     min={0}
                     max={1}
                     step={0.01}
-                    value={middleDensity}
+                    value={designIntent.density.middle}
                     onChange={(e) => {
                       setLastDensityBand("middle");
-                      setMiddleDensity(Number(e.target.value));
+                      setDesignIntent((prev) => ({
+                        ...prev,
+                        density: { ...prev.density, middle: Number(e.target.value) },
+                      }));
                     }}
                     style={{ width: Math.max(120, catalogPaneWidth - 32) }}
                   />
                 </div>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 12, marginBottom: 4 }}>
-                    Back Density: {densityStats.back.toFixed(2)} / {backDensity.toFixed(2)}
+                    Back Density: {densityStats.back.toFixed(2)} / {designIntent.density.back.toFixed(2)}
                   </div>
                   <input
                     type="range"
                     min={0}
                     max={1}
                     step={0.01}
-                    value={backDensity}
+                    value={designIntent.density.back}
                     onChange={(e) => {
                       setLastDensityBand("back");
-                      setBackDensity(Number(e.target.value));
+                      setDesignIntent((prev) => ({
+                        ...prev,
+                        density: { ...prev.density, back: Number(e.target.value) },
+                      }));
                     }}
                     style={{ width: Math.max(120, catalogPaneWidth - 32) }}
                   />
@@ -787,9 +816,23 @@ export default function App() {
                     }}
                   >
                     当前选中行允许高度:{" "}
-                    {Math.round(minHeightForRow(selectedCell.r, garden.rows, frontMinHeight, backMinHeight))}
+                    {Math.round(
+                      minHeightForRow(
+                        selectedCell.r,
+                        garden.rows,
+                        designIntent.height.frontMin,
+                        designIntent.height.backMin
+                      )
+                    )}
                     {" - "}
-                    {Math.round(maxHeightForRow(selectedCell.r, garden.rows, frontMaxHeight, backMaxHeight))}
+                    {Math.round(
+                      maxHeightForRow(
+                        selectedCell.r,
+                        garden.rows,
+                        designIntent.height.frontMax,
+                        designIntent.height.backMax
+                      )
+                    )}
                   </div>
                 ) : (
                   <div style={{ fontSize: 13, color: "#666" }}>请选择一个格子查看当前行的允许高度。</div>

@@ -1,4 +1,5 @@
 import type { GardenState } from "../store/garden";
+import type { DesignIntent } from "../type/designIntent";
 import type { PlantVariant } from "../type/plants";
 import { canPlaceFootprint, footprintBounds, footprintCells, markFootprint } from "./footprint";
 
@@ -18,14 +19,7 @@ export type LayoutScore = {
 type EngineOptions = {
   seed?: number;
   targetCoverage?: number;
-  frontMinHeight?: number;
-  backMinHeight?: number;
-  frontMaxHeight?: number;
-  backMaxHeight?: number;
-  heightGradientStrength?: number;
-  frontDensity?: number;
-  middleDensity?: number;
-  backDensity?: number;
+  designIntent?: DesignIntent;
 };
 
 type DensityBand = "front" | "middle" | "back";
@@ -86,11 +80,9 @@ export function heightFitsRow(
 export function prunePlantsByHeightRange(
   garden: GardenState,
   variants: PlantVariant[],
-  frontMinHeight: number,
-  backMinHeight: number,
-  frontMaxHeight: number,
-  backMaxHeight: number
+  designIntent: DesignIntent
 ) {
+  const { frontMin, backMin, frontMax, backMax } = designIntent.height;
   const variantMap = new Map(variants.map((v) => [v.id, v] as const));
   return {
     ...garden,
@@ -103,10 +95,10 @@ export function prunePlantsByHeightRange(
           variant.baseHeight,
           cell.row,
           garden.rows,
-          frontMinHeight,
-          backMinHeight,
-          frontMaxHeight,
-          backMaxHeight
+          frontMin,
+          backMin,
+          frontMax,
+          backMax
         )
       ) {
         return { ...cell, plant: "empty" };
@@ -119,16 +111,15 @@ export function prunePlantsByHeightRange(
 export function prunePlantsByDensityTargets(
   garden: GardenState,
   variants: PlantVariant[],
-  frontDensity: number,
-  middleDensity: number,
-  backDensity: number,
+  designIntent: DesignIntent,
   preferredBand?: DensityBand
 ) {
+  const { front, middle, back } = designIntent.density;
   const variantMap = new Map(variants.map((v) => [v.id, v] as const));
   const targetByBand: BandCounts = {
-    front: clamp01(frontDensity),
-    middle: clamp01(middleDensity),
-    back: clamp01(backDensity),
+    front: clamp01(front),
+    middle: clamp01(middle),
+    back: clamp01(back),
   };
   const totalByBand = totalCellsByBand(garden.rows, garden.cols);
   const maxByBand: BandCounts = {
@@ -431,18 +422,19 @@ export function generateAutoLayout(
   const seed = options.seed ?? Date.now();
   const rows = base.rows;
   const cols = base.cols;
-  const frontMinHeight = options.frontMinHeight ?? 0;
-  const backMinHeight = options.backMinHeight ?? 0;
-  const frontMaxHeight = options.frontMaxHeight ?? 200;
-  const backMaxHeight = options.backMaxHeight ?? 200;
-  const heightGradientStrength = options.heightGradientStrength ?? 1;
+  const designIntent = options.designIntent;
+  const frontMinHeight = designIntent?.height.frontMin ?? 0;
+  const backMinHeight = designIntent?.height.backMin ?? 0;
+  const frontMaxHeight = designIntent?.height.frontMax ?? 200;
+  const backMaxHeight = designIntent?.height.backMax ?? 200;
+  const heightGradientStrength = designIntent?.height.gradientStrength ?? 1;
   const total = rows * cols;
   const targetCoverage = clamp01(options.targetCoverage ?? 0.62);
   const targetOccupiedCells = Math.max(1, Math.floor(total * targetCoverage));
   const targetByBand: BandCounts = {
-    front: clamp01(options.frontDensity ?? targetCoverage),
-    middle: clamp01(options.middleDensity ?? targetCoverage),
-    back: clamp01(options.backDensity ?? targetCoverage),
+    front: clamp01(designIntent?.density.front ?? targetCoverage),
+    middle: clamp01(designIntent?.density.middle ?? targetCoverage),
+    back: clamp01(designIntent?.density.back ?? targetCoverage),
   };
   const totalByBand = totalCellsByBand(rows, cols);
 
