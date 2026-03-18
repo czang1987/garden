@@ -174,6 +174,34 @@
       ]
     },
     {
+      "id":"annual",
+      "name":"一年生",
+      "variants":[
+        {
+          "id": "petunia_pink",
+          "name": "牵牛花 petunia pink",
+          "icon": "assets/plants/petunia_pink/summer.png",
+          "link": "https://www.lowes.com/pd/Proven-Winners-Pink-Petunia-in-4-25-in-Pot-4-Pack/5014284699",
+          "zone": "7-11",
+          "baseHeight": 12,
+          "baseWidth": 24,
+          "footprint": [
+            2,
+            2
+          ],
+          "tags": [
+            
+          ],
+          "sun": "full",
+          "water": "twice",
+          "bloomSeasons": ["summer","autumn"],
+          "maintenance": 1
+
+        }
+      ]
+
+    },
+    {
       "id": "shrubs",
       "name": "灌木",
       "variants": [
