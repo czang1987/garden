@@ -140,7 +140,7 @@ export default function App() {
   const [backMinHeight, setBackMinHeight] = useState(36);
   const [frontMaxHeight, setFrontMaxHeight] = useState(36);
   const [backMaxHeight, setBackMaxHeight] = useState(96);
-  const [heightGradientStrength, setHeightGradientStrength] = useState(1);
+  const [heightGradientStrength, setHeightGradientStrength] = useState(0.5);
   const [rightPanel, setRightPanel] = useState<"catalog" | "auto">("catalog");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -312,7 +312,8 @@ export default function App() {
           selectedCell.r,
           selectedCell.c,
           placed,
-          variantMap
+          variantMap,
+          heightGradientStrength
         );
         console.log("[manual-select] choose", {
           row: selectedCell.r,

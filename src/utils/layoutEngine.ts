@@ -159,18 +159,25 @@ export function relativeHeightFactor(
     else if (candidateColStart > existingColEnd) deltaCol = candidateColStart - existingColEnd;
 
     const rowDistance = Math.abs(deltaRow);
+    console.log("deltaCol",deltaCol,"rowDistance",rowDistance)
     if (rowDistance === 0 && deltaCol === 0) continue;
 
     const distanceWeight = 1 / (rowDistance +1);
-    const heightDelta = candidate.baseHeight - existingVariant.baseHeight;
-    if(deltaRow*heightDelta>=0){
-      const severity = Math.min(1, (Math.abs(heightDelta) / Math.max(existingVariant.baseHeight, 1)) * 1.2);
-      const colWeight = deltaCol === 0 ? 1 : 1 / (Math.abs(deltaCol) + 1);
-      const strength = 1 + clamp01(heightGradientStrength) * 4;
-      factor *= Math.max(0.05, 1 - severity * distanceWeight * colWeight * strength);
-      console.log("severity",severity,"deltaCol",deltaCol,"deltaHeight",Math.abs(heightDelta))
-    }
+    const heightDeltaRatio = (candidate.baseHeight - existingVariant.baseHeight)*Math.sign(deltaRow)/ Math.max((existingVariant.baseHeight+candidate.baseHeight)/2, 1);
+    let severity = Math.min(1, (heightDeltaRatio+0.1) );
     
+    const colWeight = 1 / (Math.abs(deltaCol) + 1);
+    const strength = 1 + clamp01(heightGradientStrength) * 8;
+    factor *= Math.min(1,Math.max(0.05, 1 - severity * distanceWeight * colWeight * strength));
+    //console.log("severity",severity,"deltaRow",deltaRow,"deltaCol",deltaCol,"deltaHeight",heightDeltaRatio,"strength",strength,"factor",factor)
+/*    if(deltaRow*heightDelta>=0){
+      const severity = Math.max(Math.min(1, (Math.abs(heightDelta) / Math.max(existingVariant.baseHeight, 1)) * 1.2),0.1);
+      const colWeight = 1 / (Math.abs(deltaCol) + 1);
+      const strength = 1 + clamp01(heightGradientStrength) * 8;
+      factor *= Math.min(1,Math.max(0.05, 1 - severity * distanceWeight * colWeight * strength));
+      console.log("severity",severity,"deltaCol",deltaCol,"deltaHeight",Math.abs(heightDelta),"strength",strength,"factor",factor)
+    }
+*/    
   }
 
   return factor;
