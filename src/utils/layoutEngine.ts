@@ -2,6 +2,7 @@ import type { GardenState } from "../store/garden";
 import type { DesignIntent } from "../type/designIntent";
 import type { PlantVariant } from "../type/plants";
 import { canPlaceFootprint, footprintBounds, footprintCells, markFootprint } from "./footprint";
+import { plantSupportsZone } from "./zone";
 
 type ScoreBreakdown = {
   coverage: number;
@@ -104,6 +105,19 @@ export function prunePlantsByHeightRange(
         return { ...cell, plant: "empty" };
       }
       return cell;
+    }),
+  };
+}
+
+export function prunePlantsByZone(garden: GardenState, variants: PlantVariant[]) {
+  const variantMap = new Map(variants.map((v) => [v.id, v] as const));
+  return {
+    ...garden,
+    cells: garden.cells.map((cell) => {
+      if (!cell.plant || cell.plant === "empty") return cell;
+      const variant = variantMap.get(cell.plant);
+      if (!variant) return { ...cell, plant: "empty" };
+      return plantSupportsZone(variant, garden.zone) ? cell : { ...cell, plant: "empty" };
     }),
   };
 }
@@ -343,6 +357,7 @@ function pickWeighted(
   placed: Placed[],
   variantMap: Map<string, PlantVariant>,
   rows: number,
+  gardenZone: number,
   frontMinHeight: number,
   backMinHeight: number,
   frontMaxHeight: number,
@@ -354,6 +369,7 @@ function pickWeighted(
 ) {
   if (variants.length === 0) return null;
   const weightedCandidates = variants.map((v, i) => {
+    const zoneFactor = plantSupportsZone(v, gardenZone) ? 1 : 0;
     const heightFactor = heightFitsRow(
       v.baseHeight,
       candidateRow,
@@ -379,10 +395,10 @@ function pickWeighted(
     const base = 1 + ((i % 5) * 0.03);
     return {
       variant: v,
-      heightFactor,
+      heightFactor: heightFactor * zoneFactor,
       bandDensityFactor,
       placementFactor,
-      weight: base * placementFactor * heightFactor * bandDensityFactor,
+      weight: base * placementFactor * heightFactor * zoneFactor * bandDensityFactor,
     };
   });
   const sum = weightedCandidates.reduce((a, b) => a + b.weight, 0);
@@ -422,6 +438,7 @@ export function generateAutoLayout(
   const seed = options.seed ?? Date.now();
   const rows = base.rows;
   const cols = base.cols;
+  const gardenZone = base.zone;
   const designIntent = options.designIntent;
   const frontMinHeight = designIntent?.height.frontMin ?? 0;
   const backMinHeight = designIntent?.height.backMin ?? 0;
@@ -494,6 +511,7 @@ export function generateAutoLayout(
       placed,
       variantMap,
       rows,
+      gardenZone,
       frontMinHeight,
       backMinHeight,
       frontMaxHeight,

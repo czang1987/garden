@@ -5,6 +5,7 @@ export type PlantVariant = {
   name: string;
   icon: string;
   link?: string;
+  zone?: string;
   baseHeight: number;
   footprint?: [number, number];
   tags?: string[];

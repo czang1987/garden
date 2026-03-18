@@ -1,4 +1,4 @@
-export type Season = 'spring' | 'summer' | 'autumn' | 'winter'
+﻿export type Season = 'spring' | 'summer' | 'autumn' | 'winter'
 export type Plant = 'empty' | 'hydrangea'
 
 export interface Cell {
@@ -12,9 +12,10 @@ export interface GardenState {
   cols: number
   cells: Cell[]
   season: Season
+  zone: number
 }
 
-export function createGarden(rows = 20, cols = 20): GardenState {
+export function createGarden(rows = 20, cols = 20, zone = 7): GardenState {
   const cells: Cell[] = []
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -26,10 +27,11 @@ export function createGarden(rows = 20, cols = 20): GardenState {
     cols,
     cells,
     season: 'spring',
+    zone,
   }
 }
 
-//打印garden每个cell的植物
+//鎵撳嵃garden姣忎釜cell鐨勬鐗?
 export function printGarden(garden: GardenState): void{
   for(let r=0;r<garden.rows;r++){
     for(let c=0;c<garden.cols;c++){
@@ -42,11 +44,11 @@ export function printGarden(garden: GardenState): void{
 }
 
 export function resizeGarden(prev: GardenState, newRows: number, newCols: number): GardenState {
-  // 防御：最小 1×1
+  // 闃插尽锛氭渶灏?1脳1
   const rows = Math.max(1, Math.floor(newRows));
   const cols = Math.max(1, Math.floor(newCols));
 
-  // 旧数据做索引： "r,c" -> plant
+  // 鏃ф暟鎹仛绱㈠紩锛?"r,c" -> plant
   const key = (r: number, c: number) => `${r},${c}`;
   const oldMap = new Map<string, string>();
   for (const cell of prev.cells) {
@@ -65,7 +67,9 @@ export function resizeGarden(prev: GardenState, newRows: number, newCols: number
   return {
     rows,
     cols,
-    season: prev.season, // 保留季节
+    season: prev.season, // 淇濈暀瀛ｈ妭
+    zone: prev.zone,
     cells,
   };
 }
+

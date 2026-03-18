@@ -11,11 +11,13 @@ import {
   minHeightForRow,
   prunePlantsByDensityTargets,
   prunePlantsByHeightRange,
+  prunePlantsByZone,
   relativeHeightFactor,
   scoreLayout,
 } from "./utils/layoutEngine";
 import { buildOccupancyGrid, footprintCells } from "./utils/footprint";
 import { buildLayoutFile, formatLayoutFileAsReadableText, parseLayoutText } from "./utils/layoutIo";
+import { plantSupportsZone } from "./utils/zone";
 
 function clampValue(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -132,6 +134,7 @@ export default function App() {
   const [rowGapRatio, setRowGapRatio] = useState(0.77);
   const [rowsInput, setRowsInput] = useState(garden.rows);
   const [colsInput, setColsInput] = useState(garden.cols);
+  const [zoneInput, setZoneInput] = useState(garden.zone);
   const [categories, setCategories] = useState<PlantCategory[]>([]);
   const [selectedCell, setSelectedCell] = useState<{ r: number; c: number } | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -155,7 +158,8 @@ export default function App() {
   useEffect(() => {
     setRowsInput(garden.rows);
     setColsInput(garden.cols);
-  }, [garden.cols, garden.rows]);
+    setZoneInput(garden.zone);
+  }, [garden.cols, garden.rows, garden.zone]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -272,6 +276,7 @@ export default function App() {
 
   function canPlaceAtSelected(v: PlantVariant) {
     if (!selectedCell) return false;
+    if (!plantSupportsZone(v, garden.zone)) return false;
     const freed = selectedPlantFreedCells();
     const fp = (v.footprint ?? [1, 1]) as [number, number];
 
@@ -284,6 +289,7 @@ export default function App() {
 
   function disabledReason(v: PlantVariant) {
     if (!selectedCell) return "请先点击一个位置";
+    if (!plantSupportsZone(v, garden.zone)) return `当前 Zone ${garden.zone} 不适合该植物`;
     const freed = selectedPlantFreedCells();
     const fp = (v.footprint ?? [1, 1]) as [number, number];
 
@@ -349,7 +355,10 @@ export default function App() {
   }
 
   function applySize() {
-    setGarden((prev) => resizeGarden(prev, rowsInput, colsInput));
+    setGarden((prev) => ({
+      ...resizeGarden(prev, rowsInput, colsInput),
+      zone: Math.max(1, Math.min(13, Math.floor(zoneInput) || 1)),
+    }));
     setEditMode(false);
     setSelectedCell(null);
   }
@@ -400,7 +409,7 @@ export default function App() {
 
     try {
       const text = await file.text();
-      const { garden: next, warnings } = parseLayoutText(text, allVariants, garden.season);
+      const { garden: next, warnings } = parseLayoutText(text, allVariants, garden.season, garden.zone);
       setGarden(next);
       setEditMode(false);
       setSelectedCell(null);
@@ -452,6 +461,10 @@ export default function App() {
     );
   }, [allVariants, designIntent, lastDensityBand]);
 
+  useEffect(() => {
+    setGarden((prev) => prunePlantsByZone(prev, allVariants));
+  }, [allVariants, garden.zone]);
+
   return (
     <div style={{ padding: 16, maxWidth: 1800, margin: "0 auto" }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
@@ -472,6 +485,17 @@ export default function App() {
             min={1}
             value={colsInput}
             onChange={(e) => setColsInput(Number(e.target.value))}
+            style={{ width: 70, marginLeft: 6 }}
+          />
+        </label>
+        <label>
+          Zone:
+          <input
+            type="number"
+            min={1}
+            max={13}
+            value={zoneInput}
+            onChange={(e) => setZoneInput(Number(e.target.value))}
             style={{ width: 70, marginLeft: 6 }}
           />
         </label>

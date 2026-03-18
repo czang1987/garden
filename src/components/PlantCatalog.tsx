@@ -218,6 +218,9 @@ export default function PlantCatalog({
             <div style={{ color: "#777" }}>高度</div>
             <div>{hovered.v.baseHeight} cm</div>
 
+            <div style={{ color: "#777" }}>Zone</div>
+            <div>{hovered.v.zone ?? "-"}</div>
+
             <div style={{ color: "#777" }}>日照</div>
             <div>{formatSun(hovered.v.sun)}</div>
 

@@ -22,6 +22,7 @@ export type LayoutFile = {
   rows: number;
   cols: number;
   season: Season;
+  zone: number;
   plants: LayoutPlantSummary[];
   placements: LayoutPlacement[];
 };
@@ -73,6 +74,7 @@ export function buildLayoutFile(garden: GardenState, variants: PlantVariant[]): 
     rows: garden.rows,
     cols: garden.cols,
     season: garden.season,
+    zone: garden.zone,
     plants,
     placements,
   };
@@ -85,6 +87,7 @@ export function formatLayoutFileAsReadableText(layout: LayoutFile): string {
   lines.push(`Exported At: ${layout.exportedAt}`);
   lines.push(`Grid: ${layout.rows} x ${layout.cols}`);
   lines.push(`Season: ${layout.season}`);
+  lines.push(`Zone: ${layout.zone}`);
   lines.push("");
   lines.push("Plant Summary");
   lines.push("-------------");
@@ -111,10 +114,12 @@ export function parseReadableTextToLayoutFile(text: string): LayoutFile {
   const exportedAt = get("Exported At:") || new Date().toISOString();
   const grid = get("Grid:");
   const seasonRaw = get("Season:");
+  const zoneRaw = get("Zone:");
   const gridMatch = grid.match(/(\d+)\s*x\s*(\d+)/i);
   const rows = gridMatch ? Number(gridMatch[1]) : 1;
   const cols = gridMatch ? Number(gridMatch[2]) : 1;
   const season: Season = isSeason(seasonRaw) ? seasonRaw : "spring";
+  const zone = toInt(zoneRaw, 6);
 
   const placements: LayoutPlacement[] = [];
   const placeRegex = /^-\s+(.+?)\s+\(([^)]+)\)\s+@\s+row\s*=\s*(\d+)\s*,\s*col\s*=\s*(\d+)/i;
@@ -153,6 +158,7 @@ export function parseReadableTextToLayoutFile(text: string): LayoutFile {
     rows,
     cols,
     season,
+    zone,
     plants: Array.from(counts.values()),
     placements,
   };
@@ -166,7 +172,8 @@ type ImportResult = {
 export function parseLayoutText(
   text: string,
   variants: PlantVariant[],
-  fallbackSeason: Season
+  fallbackSeason: Season,
+  fallbackZone = 6
 ): ImportResult {
   let raw: any;
   try {
@@ -182,8 +189,9 @@ export function parseLayoutText(
   const rows = Math.max(1, rowsFromFile || maxRow + 1);
   const cols = Math.max(1, colsFromFile || maxCol + 1);
   const season = isSeason(raw?.season) ? raw.season : fallbackSeason;
+  const zone = toInt(raw?.zone, fallbackZone);
 
-  const next = createGarden(rows, cols);
+  const next = createGarden(rows, cols, zone);
   next.season = season;
 
   const variantMap = new Map(variants.map((v) => [v.id, v] as const));
