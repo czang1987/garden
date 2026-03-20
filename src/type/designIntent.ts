@@ -11,6 +11,9 @@ export type DesignIntent = {
     middle: number;
     back: number;
   };
+  layout: {
+    symmetry: number;
+  };
 };
 
 export const DEFAULT_DESIGN_INTENT: DesignIntent = {
@@ -25,5 +28,8 @@ export const DEFAULT_DESIGN_INTENT: DesignIntent = {
     front: 0.62,
     middle: 0.62,
     back: 0.62,
+  },
+  layout: {
+    symmetry: 0,
   },
 };

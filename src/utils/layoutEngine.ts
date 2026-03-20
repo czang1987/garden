@@ -33,6 +33,168 @@ type Placed = {
   id: string;
 };
 
+function isMirrorPosition(
+  cols:number,
+  candidateRow: number, 
+  candidateCol: number,
+  candidatefp: [number,number],
+  existingRow: number,
+  existingCol: number,
+  existingfp: [number,number],
+  rowTolerence: number,
+  colTolerence: number
+
+){
+  
+  let mc=cols-candidateCol+1;
+  let overlap_col=!(existingCol>mc || existingCol+(existingfp[1]+colTolerence)<mc-(candidatefp[1]+colTolerence));
+  let overlap_row=!(existingRow-(existingfp[0]+rowTolerence)>candidateRow || existingRow<candidateRow-(candidatefp[0]+rowTolerence));
+  return overlap_col&&overlap_row;
+
+}
+
+function symmetryFactor(
+  candidate: PlantVariant,
+  candidateRow: number,
+  candidateCol: number,
+  cols: number,
+  rows: number,
+  placed: Placed[],
+  symmetryStrength: number,
+  variantMap: Map<string, PlantVariant>
+) {
+  const strength = clamp01(symmetryStrength);
+  if (strength <= 0) return 1;
+
+  const fp = (candidate.footprint ?? [1, 1]) as [number, number];
+  
+  const candidateCenter = candidateCol + fp[1] / 2;
+  const gardenCenter = cols / 2;
+  const centerDistance = Math.abs(candidateCenter - gardenCenter);
+  const centerWeight = cols <= 1 ? 1 : clamp01(centerDistance / (cols / 2));
+
+  if (centerDistance==0) {
+    return 1 + strength * 0.15;
+  }
+
+  const maxRowDistance = Math.max(1, Math.round(rows * 0.1));
+  const maxColDistance = Math.max(1, Math.round(cols * 0.1));
+  let bestSamePlantScore = -1;
+  let bestAnyPlantScore = -1;
+
+  for (const item of placed) {
+    const existingVariant = variantMap.get(item.id);
+    if (!existingVariant) continue;
+
+    const existingFp = (existingVariant.footprint ?? [1, 1]) as [number, number];
+    if(!isMirrorPosition(cols,candidateRow,candidateCol,fp,item.r,item.c,existingFp,maxRowDistance,maxColDistance)) continue;
+    
+    if (item.id === candidate.id) {
+      bestSamePlantScore = 1;
+    } else {
+      bestAnyPlantScore = 1;
+    }
+  }
+
+  if (bestSamePlantScore >= 0) {
+    return 1 + strength * (0.45 + 0.75 * bestSamePlantScore) * centerWeight;
+  }
+
+  if (bestAnyPlantScore >= 0) {
+    return 1 + strength * (0.12 + 0.28 * bestAnyPlantScore) * centerWeight;
+  }
+
+  return Math.max(0.72, 1 - strength * 0.2 * centerWeight);
+}
+
+function symmetryPositionFactor(
+  candidateRow: number,
+  candidateCol: number,
+  cols: number,
+  rows: number,
+  placed: Placed[],
+  symmetryStrength: number,
+  variantMap: Map<string, PlantVariant>
+) {
+  const strength = clamp01(symmetryStrength);
+  if (strength <= 0) return 1;
+
+  const candidateFp: [number, number] = [1, 1];
+  const candidateCenter = candidateCol + 0.5;
+  const gardenCenter = cols / 2;
+  const centerDistance = Math.abs(candidateCenter - gardenCenter);
+  const centerWeight = cols <= 1 ? 1 : clamp01(centerDistance / (cols / 2));
+
+  if (centerDistance === 0) {
+    return 1 + strength * 0.1;
+  }
+
+  const maxRowDistance = Math.max(1, Math.round(rows * 0.1));
+  const maxColDistance = Math.max(1, Math.round(cols * 0.1));
+  let hasMirror = false;
+
+  for (const item of placed) {
+    const existingVariant = variantMap.get(item.id);
+    if (!existingVariant) continue;
+    const existingFp = (existingVariant.footprint ?? [1, 1]) as [number, number];
+    if (
+      isMirrorPosition(
+        cols,
+        candidateRow,
+        candidateCol,
+        candidateFp,
+        item.r,
+        item.c,
+        existingFp,
+        maxRowDistance,
+        maxColDistance
+      )
+    ) {
+      hasMirror = true;
+      break;
+    }
+  }
+
+  if (hasMirror) {
+    return 1 + strength * (0.35 + 0.75 * centerWeight);
+  }
+
+  return Math.max(0.78, 1 - strength * 0.12 * centerWeight);
+}
+
+function pickWeightedPosition(
+  positions: Array<{ r: number; c: number }>,
+  seed: number,
+  cols: number,
+  rows: number,
+  placed: Placed[],
+  symmetryStrength: number,
+  variantMap: Map<string, PlantVariant>
+) {
+  if (positions.length === 0) return -1;
+  const weighted = positions.map((pos, i) => {
+    const base = 1 + ((i % 7) * 0.02);
+    const mirrorFactor = symmetryPositionFactor(
+      pos.r,
+      pos.c,
+      cols,
+      rows,
+      placed,
+      symmetryStrength,
+      variantMap
+    );
+    return { weight: base * mirrorFactor };
+  });
+  const sum = weighted.reduce((acc, item) => acc + item.weight, 0);
+  if (sum <= 0) return Math.floor(seededRandom(seed) * positions.length);
+  let p = seededRandom(seed) * sum;
+  for (let i = 0; i < weighted.length; i++) {
+    p -= weighted[i].weight;
+    if (p <= 0) return i;
+  }
+  return weighted.length - 1;
+}
+
 function clamp01(x: number) {
   return Math.max(0, Math.min(1, x));
 }
@@ -325,7 +487,7 @@ export function relativeHeightFactor(
     else if (candidateColStart > existingColEnd) deltaCol = candidateColStart - existingColEnd;
 
     const rowDistance = Math.abs(deltaRow);
-    console.log("deltaCol",deltaCol,"rowDistance",rowDistance)
+    //console.log("deltaCol",deltaCol,"rowDistance",rowDistance)
     if (rowDistance === 0 && deltaCol === 0) continue;
 
     const distanceWeight = 1 / (rowDistance +1);
@@ -363,9 +525,11 @@ function pickWeighted(
   frontMaxHeight: number,
   backMaxHeight: number,
   heightGradientStrength: number,
+  symmetryStrength: number,
   occupiedByBand: BandCounts,
   totalByBand: BandCounts,
-  targetByBand: BandCounts
+  targetByBand: BandCounts,
+  cols: number
 ) {
   if (variants.length === 0) return null;
   const weightedCandidates = variants.map((v, i) => {
@@ -392,13 +556,15 @@ function pickWeighted(
       variantMap,
       heightGradientStrength
     );
+    const mirrorFactor = symmetryFactor(v, candidateRow, candidateCol, cols, rows, placed, symmetryStrength,variantMap);
     const base = 1 + ((i % 5) * 0.03);
     return {
       variant: v,
       heightFactor: heightFactor * zoneFactor,
       bandDensityFactor,
       placementFactor,
-      weight: base * placementFactor * heightFactor * zoneFactor * bandDensityFactor,
+      mirrorFactor,
+      weight: base * placementFactor * heightFactor * zoneFactor * bandDensityFactor * mirrorFactor,
     };
   });
   const sum = weightedCandidates.reduce((a, b) => a + b.weight, 0);
@@ -413,6 +579,7 @@ function pickWeighted(
         col: candidateCol,
         plantId: chosen.variant.id,
         placementFactor: Number(chosen.placementFactor.toFixed(4)),
+        mirrorFactor: Number(chosen.mirrorFactor.toFixed(4)),
         weight: Number(chosen.weight.toFixed(4)),
       });
       return chosen.variant;
@@ -424,6 +591,7 @@ function pickWeighted(
     col: candidateCol,
     plantId: fallback.variant.id,
     placementFactor: Number(fallback.placementFactor.toFixed(4)),
+    mirrorFactor: Number(fallback.mirrorFactor.toFixed(4)),
     weight: Number(fallback.weight.toFixed(4)),
     fallback: true,
   });
@@ -445,6 +613,7 @@ export function generateAutoLayout(
   const frontMaxHeight = designIntent?.height.frontMax ?? 200;
   const backMaxHeight = designIntent?.height.backMax ?? 200;
   const heightGradientStrength = designIntent?.height.gradientStrength ?? 1;
+  const symmetryStrength = designIntent?.layout.symmetry ?? 0;
   const total = rows * cols;
   const targetCoverage = clamp01(options.targetCoverage ?? 0.62);
   const targetOccupiedCells = Math.max(1, Math.floor(total * targetCoverage));
@@ -467,7 +636,7 @@ export function generateAutoLayout(
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) positions.push({ r, c });
   }
-  const shuffled = makeShuffled(positions, seed);
+  const remainingPositions = makeShuffled(positions, seed);
 
   const placed: Placed[] = [];
   let used = 0;
@@ -498,9 +667,24 @@ export function generateAutoLayout(
     placed.push({ r: cell.row, c: cell.col, id: cell.plant });
   }
 
-  let idx = 0;
-  while (idx < shuffled.length && used < targetOccupiedCells && !bandTargetsMet(occupiedByBand, totalByBand, targetByBand)) {
-    const { r, c } = shuffled[idx++];
+  let pickCount = 0;
+  while (
+    remainingPositions.length > 0 &&
+    used < targetOccupiedCells &&
+    !bandTargetsMet(occupiedByBand, totalByBand, targetByBand)
+  ) {
+    const positionIndex = pickWeightedPosition(
+      remainingPositions,
+      seed + pickCount * 97,
+      cols,
+      rows,
+      placed,
+      symmetryStrength,
+      variantMap
+    );
+    pickCount += 1;
+    if (positionIndex < 0) break;
+    const [{ r, c }] = remainingPositions.splice(positionIndex, 1);
     if (occupied[r][c]) continue;
 
     const chosen = pickWeighted(
@@ -517,9 +701,11 @@ export function generateAutoLayout(
       frontMaxHeight,
       backMaxHeight,
       heightGradientStrength,
+      symmetryStrength,
       occupiedByBand,
       totalByBand,
-      targetByBand
+      targetByBand,
+      cols
     );
     if (!chosen) break;
     const fp = (chosen.footprint ?? [1, 1]) as [number, number];

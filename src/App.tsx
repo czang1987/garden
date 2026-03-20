@@ -794,6 +794,25 @@ export default function App() {
                     style={{ width: Math.max(120, catalogPaneWidth - 32) }}
                   />
                 </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                    Symmetry: {designIntent.layout.symmetry.toFixed(2)}
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={designIntent.layout.symmetry}
+                    onChange={(e) =>
+                      setDesignIntent((prev) => ({
+                        ...prev,
+                        layout: { ...prev.layout, symmetry: Number(e.target.value) },
+                      }))
+                    }
+                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
+                  />
+                </div>
                 <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: "#2f3d2f" }}>
                   前中后排密度
                 </div>
