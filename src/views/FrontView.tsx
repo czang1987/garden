@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+﻿import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 import type { GardenState } from "../store/garden";
 import { footprintCells } from "../utils/footprint";
@@ -36,6 +36,22 @@ type HoverPlant = {
   height: number;
   x: number;
   y: number;
+};
+
+export type FrontViewHandle = {
+  exportPng: () => string | null;
+};
+
+type FrontViewProps = {
+  garden: GardenState;
+  colGap?: number;
+  rowGap?: number;
+  monetMode?: boolean;
+  showEditGrid?: boolean;
+  selectedCell?: { r: number; c: number } | null;
+  onCellSelect?: (cell: { r: number; c: number }) => void;
+  onCanvasBackgroundClick?: () => void;
+  canvasWidth?: number;
 };
 
 function seededRandom(seed: number) {
@@ -228,6 +244,61 @@ function addPaperOverlay(scene: PIXI.Container, width: number, height: number) {
   scene.addChild(overlay);
 }
 
+function createMonetBrushTexture(width: number, height: number) {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width));
+  canvas.height = Math.max(1, Math.round(height));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return PIXI.Texture.WHITE;
+
+  const palette = [
+    "rgba(111, 147, 183, 0.17)",
+    "rgba(170, 193, 214, 0.16)",
+    "rgba(188, 210, 171, 0.14)",
+    "rgba(236, 218, 187, 0.16)",
+    "rgba(198, 179, 161, 0.14)",
+    "rgba(156, 178, 196, 0.12)",
+  ];
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < 360; i++) {
+    const w = 28 + seededRandom(i * 13 + width) * 130;
+    const h = 10 + seededRandom(i * 29 + height) * 34;
+    const x = seededRandom(i * 43 + 5) * canvas.width;
+    const y = seededRandom(i * 61 + 9) * canvas.height;
+    const angle = (seededRandom(i * 97 + 17) - 0.5) * 0.95;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = palette[i % palette.length];
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+
+  return PIXI.Texture.from(canvas);
+}
+
+function addMonetOverlay(scene: PIXI.Container, width: number, height: number) {
+  const wash = new PIXI.Graphics()
+    .rect(0, 0, width, height)
+    .fill({ color: 0xf1ebdd, alpha: 0.16 });
+  wash.zIndex = 995;
+  scene.addChild(wash);
+
+  const colorVeil = new PIXI.Graphics()
+    .rect(0, 0, width, height)
+    .fill({ color: 0xdbe4d8, alpha: 0.08 });
+  colorVeil.zIndex = 995;
+  scene.addChild(colorVeil);
+
+  const brush = new PIXI.Sprite(createMonetBrushTexture(width, height));
+  brush.width = width;
+  brush.height = height;
+  brush.alpha = 0.54;
+  brush.zIndex = 996;
+  scene.addChild(brush);
+}
+
 function drawSkyBackdrop(
   layer: PIXI.Container,
   baseX: number,
@@ -338,25 +409,20 @@ function drawOccupiedCells(
   layer.addChild(g);
 }
 
-export function FrontView({
-  garden,
-  colGap = 110,
-  rowGap = DEFAULT_ROW_GAP,
-  showEditGrid = false,
-  selectedCell = null,
-  onCellSelect,
-  onCanvasBackgroundClick,
-  canvasWidth = 980,
-}: {
-  garden: GardenState;
-  colGap?: number;
-  rowGap?: number;
-  showEditGrid?: boolean;
-  selectedCell?: { r: number; c: number } | null;
-  onCellSelect?: (cell: { r: number; c: number }) => void;
-  onCanvasBackgroundClick?: () => void;
-  canvasWidth?: number;
-}) {
+export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function FrontView(
+  {
+    garden,
+    colGap = 110,
+    rowGap = DEFAULT_ROW_GAP,
+    monetMode = false,
+    showEditGrid = false,
+    selectedCell = null,
+    onCellSelect,
+    onCanvasBackgroundClick,
+    canvasWidth = 980,
+  }: FrontViewProps,
+  ref
+) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<PIXI.Application | null>(null);
   const sceneRef = useRef<PIXI.Container | null>(null);
@@ -375,6 +441,17 @@ export function FrontView({
   const baseX = Math.max(FRAME + 24, Math.floor((canvasWidth - gridW) / 2));
   const baseY = layoutMetrics.baseY;
   const canvasH = layoutMetrics.canvasH;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      exportPng: () => {
+        const canvas = appRef.current?.canvas;
+        return canvas instanceof HTMLCanvasElement ? canvas.toDataURL("image/png") : null;
+      },
+    }),
+    []
+  );
 
   useEffect(() => {
     fetch("/assets/plants/index.json")
@@ -443,6 +520,7 @@ export function FrontView({
         backgroundAlpha: 0,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
+        preserveDrawingBuffer: true,
       });
       if (destroyed) return;
 
@@ -566,6 +644,22 @@ export function FrontView({
       await drawBrickFrameEdges(frameLayer, gridW, gridH, baseX, baseY, rowGap, colGap, FRAME);
       await drawMulchPerCell(bgLayer, garden, rowGap, colGap, baseX, baseY);
 
+      if (monetMode) {
+        const bgBlur = new PIXI.BlurFilter();
+        bgBlur.strength = 3.4;
+        const plantBlur = new PIXI.BlurFilter();
+        plantBlur.strength = 1.8;
+        const frameBlur = new PIXI.BlurFilter();
+        frameBlur.strength = 0.8;
+        skyLayer.alpha = 0.92;
+        frameLayer.alpha = 0.72;
+        bgLayer.alpha = 0.93;
+        plantLayer.alpha = 0.94;
+        bgLayer.filters = [bgBlur];
+        frameLayer.filters = [frameBlur];
+        plantLayer.filters = [plantBlur];
+      }
+
       if (SHOW_DEBUG_OCCUPIED_CELLS && showEditGrid) {
         drawOccupiedCells(debugGridLayer, garden.cells, variantMap, rowGap, colGap, baseX, baseY, garden.rows, garden.cols);
       }
@@ -593,10 +687,14 @@ export function FrontView({
         sprite.anchor.set(0.5, 1);
         const { cx, by } = footprintCenterBottom(cell.row, cell.col, fp, rowGap, colGap, baseX, baseY);
         sprite.position.set(cx, by);
+        if (monetMode) {
+          sprite.tint = tintFromFactor(-0.28);
+          sprite.alpha = 0.95;
+        }
 
         const shadow = new PIXI.Graphics()
           .ellipse(cx, by - 10, 20 + fp[1] * 6, 6 + fp[0] * 1.5)
-          .fill({ color: 0x000000, alpha: 0.12 });
+          .fill({ color: 0x6f7f76, alpha: monetMode ? 0.18 : 0.12 });
 
         fitSpriteByWidth(sprite, colGap * fp[1]);
         const maxRow = Math.max(0, garden.rows - 1);
@@ -634,6 +732,10 @@ export function FrontView({
         }
       }
 
+      if (monetMode) {
+        addMonetOverlay(scene, canvasWidth, canvasH);
+      }
+
       addPaperOverlay(scene, canvasWidth, canvasH);
       scene.sortChildren();
     })();
@@ -641,7 +743,7 @@ export function FrontView({
     return () => {
       canceled = true;
     };
-  }, [appReady, baseX, baseY, canvasH, canvasWidth, colGap, garden, gridH, gridW, rowGap, selectedCell, showEditGrid, variantMap]);
+  }, [appReady, baseX, baseY, canvasH, canvasWidth, colGap, garden, gridH, gridW, monetMode, rowGap, selectedCell, showEditGrid, variantMap]);
 
   return (
     <div ref={mountRef} style={{ width: canvasWidth, minHeight: canvasH, position: "relative" }}>
@@ -668,6 +770,5 @@ export function FrontView({
       ) : null}
     </div>
   );
-}
-
+});
 

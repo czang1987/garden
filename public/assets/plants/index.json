@@ -7,7 +7,7 @@
       "variants": [
         {
           "id": "rose_knockout_red",
-          "name": "Knock Out（红）",
+          "name": "Knock Out",
           "icon": "/assets/plants/rose_knockout_red/icon.png",
           "link": "https://www.lowes.com/pd/Knockout-Roses-1-Gal-Rose-KO-Double-Red/5015643585",
           "baseHeight": 48,
@@ -18,6 +18,7 @@
             4,
             4
           ],
+          "color":"red",
           "tags": [
             "红",
             "耐热",
@@ -33,7 +34,7 @@
         },
         {
           "id": "rose_iceberg_white",
-          "name": "Iceberg（白）",
+          "name": "Iceberg",
           "icon": "/assets/plants/rose_iceberg_white/icon.png",
           "link": "https://www.homedepot.com/p/DIRECT-GARDENING-Iceberg-White-Flowering-Climbing-Rose-Bush-Dormant-Bare-Root-Starter-Plant-1-Pack-99229/334435255?MERCH=REC-_-pipinstock-_-329147068-_-0-_-n/a-_-n/a-_-n/a-_-n/a-_-n/a",
           "baseHeight": 48,
@@ -43,6 +44,7 @@
             3,
             3
           ],
+          "color":"white",
           "tags": [
             "白",
             "开花多"
@@ -64,7 +66,7 @@
       "variants": [
         {
           "id": "hydrangea_blue_bush",
-          "name": "大花绣球（蓝）",
+          "name": "大花绣球",
           "icon": "/assets/plants/hydrangea_blue_bush/icon.png",
           "link": "https://www.lowes.com/pd/Southern-Living-Plant-Collection-2-5-Qt-Hydrangea-Big-Daddy/5015643673",
           "zone": "4-9",
@@ -74,6 +76,8 @@
             6,
             6
           ],
+
+          "color":"blue",
           "tags": [
             "蓝"
           ],
@@ -97,6 +101,7 @@
             6,
             6
           ],
+          "color":"white",
           "tags": [
             "绣球",
             "庭院主景",
@@ -129,6 +134,7 @@
             2,
             2
           ],
+          "color":"red",
           "tags": [
             "红",
             "春季"
@@ -159,6 +165,7 @@
             3,
             3
           ],
+          "color":"violet",
           "tags": [
             "紫",
             "香气"
@@ -189,12 +196,79 @@
             2,
             2
           ],
+          "color":"pink",
           "tags": [
             
           ],
           "sun": "full",
           "water": "twice",
           "bloomSeasons": ["summer","autumn"],
+          "maintenance": 1
+
+        },
+         {
+          "id": "sweet_alyssum_pink",
+          "name": "香雪球 SWEET ALYSSUM(pink)",
+          "icon": "assets/plants/sweet_alyssum_pink/summer.png",
+          "link": "https://www.gardendesign.com/annuals/alyssum.html",
+          "zone": "1-11",
+          "baseHeight": 12,
+          "baseWidth": 36,
+          "footprint": [
+            3,
+            3
+          ],
+          "color": "pink",
+          "tags": [
+            
+          ],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": ["spring","summer","autumn"],
+          "maintenance": 1
+
+        },
+        {
+          "id": "sweet_alyssum_violet",
+          "name": "香雪球 SWEET ALYSSUM(violet)",
+          "icon": "assets/plants/sweet_alyssum_violet/summer.png",
+          "link": "https://www.gardendesign.com/annuals/alyssum.html",
+          "zone": "1-11",
+          "baseHeight": 12,
+          "baseWidth": 36,
+          "footprint": [
+            3,
+            3
+          ],
+          "color": "violet",
+          "tags": [
+            
+          ],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": ["spring","summer","autumn"],
+          "maintenance": 1
+
+        },
+        {
+          "id": "sweet_alyssum_white",
+          "name": "香雪球 SWEET ALYSSUM(white)",
+          "icon": "assets/plants/sweet_alyssum_white/summer.png",
+          "link": "https://www.gardendesign.com/annuals/alyssum.html",
+          "zone": "1-11",
+          "baseHeight": 12,
+          "baseWidth": 36,
+          "footprint": [
+            3,
+            3
+          ],
+          "color":"white",
+          "tags": [
+            
+          ],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": ["spring","summer","autumn"],
           "maintenance": 1
 
         }
@@ -217,6 +291,7 @@
             4,
             4
           ],
+          "color":"green",
           "tags": [
             "常绿",
             "低维护",
@@ -239,6 +314,7 @@
             4,
             4
           ],
+          "color":"green",
           "tags": [
             "隐私屏障",
             "常绿",
@@ -267,6 +343,7 @@
             2,
             2
           ],
+          "color":"violet",
           "tags": [
             "传粉友好",
             "耐旱",
@@ -288,6 +365,7 @@
           "zone": "2-11",
           "baseHeight": 24,
           "baseWidth": 12,
+          "color":"yellow",
           "footprint": [
             2,
             2
@@ -313,6 +391,7 @@
           "baseWidth": 24,
           "baseHeight": 24,
           "zone": "3-8",
+          "color":"white",
           "footprint": [
             2,
             2
@@ -341,6 +420,7 @@
             3,
             3
           ],
+          "color":"pink",
           "tags": [
             "大花",
             "春夏",
@@ -367,7 +447,7 @@
           "link": "https://www.lowes.com/pd/Spring-Hill-Nurseries-Northwinds-Panicum-Dormant-Ornamental-Grass-in-Bareroot/5013366533",
           "baseHeight": 72,
           "baseWidth": 48,
-         
+          "color":"green",
           "footprint": [
             4,
             4
@@ -392,7 +472,7 @@
           "link": "https://www.greatgardenplants.com/products/twilight-zone-little-bluestem-grass?variant=42917845106855&tw_source=google&tw_adid=&tw_campaign=18056497623&tw_kwdid=&gad_source=1&gad_campaignid=17336235066&gbraid=0AAAAAD-Q5OBOCod13LcLiu1O0Hb-yTKRq&gclid=Cj0KCQiAk6rNBhCxARIsAN5mQLuk6U-04dJjg_SCafnKmjvmjy2Ltk_hihkcIhi8UmIxKD-Q9JwXTCsaAsTCEALw_wcB",
           "baseHeight": 60,
           "baseWidth": 48,
-          
+          "color":"green"
           "zone": "3-9",
           "footprint": [
             4,

@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import PlantCatalog from "./components/PlantCatalog";
-import { FrontView } from "./views/FrontView";
+import { FrontView, type FrontViewHandle } from "./views/FrontView";
 import { createGarden, resizeGarden } from "./store/garden";
 import type { GardenState, Season } from "./store/garden";
 import { DEFAULT_DESIGN_INTENT, type DesignIntent } from "./type/designIntent";
@@ -132,6 +132,7 @@ function DualSlider({
 export default function App() {
   const [garden, setGarden] = useState<GardenState>(createGarden(20, 20));
   const [rowGapRatio, setRowGapRatio] = useState(0.77);
+  const [monetMode, setMonetMode] = useState(false);
   const [rowsInput, setRowsInput] = useState(garden.rows);
   const [colsInput, setColsInput] = useState(garden.cols);
   const [zoneInput, setZoneInput] = useState(garden.zone);
@@ -147,6 +148,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const frontPaneRef = useRef<HTMLDivElement | null>(null);
+  const frontViewRef = useRef<FrontViewHandle | null>(null);
   const catalogPaneRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -398,6 +400,21 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function exportFrontViewPng() {
+    const url = frontViewRef.current?.exportPng();
+    if (!url) {
+      alert("当前 FrontView 还没有可导出的画布。");
+      return;
+    }
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    a.href = url;
+    a.download = `frontview-${stamp}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   function triggerImport() {
     fileInputRef.current?.click();
   }
@@ -502,6 +519,7 @@ export default function App() {
         <button onClick={applySize}>应用</button>
         <button onClick={clearAllPlants}>清空全部植物</button>
         <button onClick={exportLayout}>导出布局文件</button>
+        <button onClick={exportFrontViewPng}>导出 FrontView PNG</button>
         <button onClick={triggerImport}>导入布局文件</button>
         <input
           ref={fileInputRef}
@@ -518,6 +536,15 @@ export default function App() {
             {s}
           </button>
         ))}
+        <button
+          onClick={() => setMonetMode((prev) => !prev)}
+          style={{
+            border: monetMode ? "1px solid #6b7f59" : "1px solid #d9d9d9",
+            background: monetMode ? "#eef4e7" : "#fff",
+          }}
+        >
+          {monetMode ? "Monet On" : "Monet Off"}
+        </button>
         <span style={{ fontSize: 13, color: "#444", marginLeft: 8 }}>View Angle</span>
         <input
           type="range"
@@ -586,9 +613,11 @@ export default function App() {
             点击左侧 front view 进入编辑，点击外部退出编辑。
           </div>
           <FrontView
+            ref={frontViewRef}
             garden={garden}
             colGap={colGap}
             rowGap={rowGap}
+            monetMode={monetMode}
             canvasWidth={canvasWidth}
             showEditGrid={editMode}
             selectedCell={selectedCell}
@@ -869,3 +898,4 @@ export default function App() {
     </div>
   );
 }
+
