@@ -16,8 +16,10 @@ import {
   scoreLayout,
   topSymmetryCandidateCells,
 } from "./utils/layoutEngine";
+import { buildDesignLayoutSvg, buildDesignReportHtml, buildDesignReportPlantRows } from "./utils/designReport";
 import { buildOccupancyGrid, footprintCells } from "./utils/footprint";
-import { buildLayoutFile, formatLayoutFileAsReadableText, parseLayoutText } from "./utils/layoutIo";
+import { parseLayoutText } from "./utils/layoutIo";
+import { stylizeFrontViewImage, type FrontViewExportStyle } from "./utils/stylizeApi";
 import { plantSupportsZone } from "./utils/zone";
 
 function clampValue(value: number, min: number, max: number) {
@@ -236,8 +238,7 @@ function ColorDotSelect({
 
 export default function App() {
   const [garden, setGarden] = useState<GardenState>(createGarden(20, 20));
-  const [rowGapRatio, setRowGapRatio] = useState(0.77);
-  const [monetMode, setMonetMode] = useState(false);
+  const [rowGapRatio, setRowGapRatio] = useState(0.28);
   const [rowsInput, setRowsInput] = useState(garden.rows);
   const [colsInput, setColsInput] = useState(garden.cols);
   const [zoneInput, setZoneInput] = useState(garden.zone);
@@ -248,8 +249,14 @@ export default function App() {
   const [catalogPaneWidth, setCatalogPaneWidth] = useState(320);
   const [designIntent, setDesignIntent] = useState<DesignIntent>(DEFAULT_DESIGN_INTENT);
   const [lastDensityBand, setLastDensityBand] = useState<"front" | "middle" | "back" | null>(null);
-  const [rightPanel, setRightPanel] = useState<"catalog" | "auto">("catalog");
+  const [rightPanel, setRightPanel] = useState<"catalog" | "auto">("auto");
   const [selectedColorPreference, setSelectedColorPreference] = useState("");
+  const [isGeneratingLayout, setIsGeneratingLayout] = useState(false);
+  const [isExportingReport, setIsExportingReport] = useState(false);
+  const [isStylizingFrontView, setIsStylizingFrontView] = useState(false);
+  const [exportProgressText, setExportProgressText] = useState("");
+  const [exportProgressValue, setExportProgressValue] = useState<number | null>(null);
+  const [frontViewExportStyle, setFrontViewExportStyle] = useState<FrontViewExportStyle>("download");
 
   const availableColors = useMemo(
     () =>
@@ -269,6 +276,10 @@ export default function App() {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const frontPaneRef = useRef<HTMLDivElement | null>(null);
   const frontViewRef = useRef<FrontViewHandle | null>(null);
+  const springFrontalReportFrontViewRef = useRef<FrontViewHandle | null>(null);
+  const summerFrontalReportFrontViewRef = useRef<FrontViewHandle | null>(null);
+  const autumnFrontalReportFrontViewRef = useRef<FrontViewHandle | null>(null);
+  const winterFrontalReportFrontViewRef = useRef<FrontViewHandle | null>(null);
   const catalogPaneRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -370,6 +381,17 @@ export default function App() {
   const availableGridWidth = Math.max(160, canvasWidth - horizontalPadding);
   const colGap = Math.max(18, Math.floor(availableGridWidth / Math.max(1, garden.cols)));
   const rowGap = Math.max(4, Math.round(colGap * rowGapRatio));
+  const reportCanvasWidth = 1200;
+
+  function computeViewMetrics(targetCanvasWidth: number, ratio: number) {
+    const reportAvailableWidth = Math.max(160, targetCanvasWidth - horizontalPadding);
+    const reportColGap = Math.max(18, Math.floor(reportAvailableWidth / Math.max(1, garden.cols)));
+    const reportRowGap = Math.max(4, Math.round(reportColGap * ratio));
+    return { colGap: reportColGap, rowGap: reportRowGap };
+  }
+
+  const frontalMetrics = useMemo(() => computeViewMetrics(reportCanvasWidth, 0.22), [garden.cols]);
+  const reportSeasons: Season[] = ["spring", "summer", "autumn", "winter"];
 
   function getCell(next: GardenState, r: number, c: number) {
     return next.cells.find((x) => x.row === r && x.col === c) ?? null;
@@ -495,15 +517,22 @@ export default function App() {
     setSelectedCell(null);
   }
 
-  function autoGenerate() {
-    setGarden((prev) =>
-      generateAutoLayout(prev, allVariants, {
-        targetCoverage: 0.62,
-        designIntent,
-      })
-    );
-    setEditMode(false);
-    setSelectedCell(null);
+  async function autoGenerate() {
+    if (isGeneratingLayout) return;
+    setIsGeneratingLayout(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    try {
+      setGarden((prev) =>
+        generateAutoLayout(prev, allVariants, {
+          targetCoverage: 0.62,
+          designIntent,
+        })
+      );
+      setEditMode(false);
+      setSelectedCell(null);
+    } finally {
+      window.setTimeout(() => setIsGeneratingLayout(false), 0);
+    }
   }
 
   function clearAllPlants() {
@@ -515,34 +544,125 @@ export default function App() {
     setSelectedCell(null);
   }
 
-  function exportLayout() {
-    const doc = buildLayoutFile(garden, allVariants);
-    const readable = formatLayoutFileAsReadableText(doc);
-    const blob = new Blob([readable], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
+  function downloadDataUrl(dataUrl: string, filename: string) {
     const a = document.createElement("a");
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    a.href = url;
-    a.download = `garden-layout-${stamp}.txt`;
+    a.href = dataUrl;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
   }
 
-  function exportFrontViewPng() {
+  async function exportFrontViewPng() {
     const url = frontViewRef.current?.exportPng();
     if (!url) {
       alert("当前 FrontView 还没有可导出的画布。");
       return;
     }
-    const a = document.createElement("a");
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    a.href = url;
-    a.download = `frontview-${stamp}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    if (frontViewExportStyle === "download") {
+      downloadDataUrl(url, `frontview-${stamp}.png`);
+      return;
+    }
+
+    if (isStylizingFrontView) return;
+    setIsStylizingFrontView(true);
+    setExportProgressText(
+      frontViewExportStyle === "download" ? "正在准备导出当前效果图..." : "正在上传当前效果图并生成风格版本..."
+    );
+    setExportProgressValue(frontViewExportStyle === "download" ? 30 : 20);
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    try {
+      const result = await stylizeFrontViewImage(url, frontViewExportStyle);
+      setExportProgressText("风格图已生成，正在下载...");
+      setExportProgressValue(90);
+      downloadDataUrl(result.imageDataUrl, `frontview-${frontViewExportStyle}-${stamp}.jpg`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      alert(`风格化失败：${message}`);
+    } finally {
+      setExportProgressText("");
+      setExportProgressValue(null);
+      window.setTimeout(() => setIsStylizingFrontView(false), 0);
+    }
+  }
+
+  async function exportDesignReport() {
+    if (isExportingReport) return;
+    setIsExportingReport(true);
+    setExportProgressText("正在准备四季视图并整理设计说明...");
+    setExportProgressValue(10);
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    try {
+      const rawSeasonalViews = [
+        {
+          season: "spring" as Season,
+          frontalPng: springFrontalReportFrontViewRef.current?.exportPng() ?? "",
+        },
+        {
+          season: "summer" as Season,
+          frontalPng: summerFrontalReportFrontViewRef.current?.exportPng() ?? "",
+        },
+        {
+          season: "autumn" as Season,
+          frontalPng: autumnFrontalReportFrontViewRef.current?.exportPng() ?? "",
+        },
+        {
+          season: "winter" as Season,
+          frontalPng: winterFrontalReportFrontViewRef.current?.exportPng() ?? "",
+        },
+      ];
+      if (rawSeasonalViews.some((view) => !view.frontalPng)) {
+        alert("设计说明里的 FrontView 还没有准备好，请稍等几秒后再试。");
+        return;
+      }
+
+      let seasonalViews = rawSeasonalViews;
+      if (frontViewExportStyle !== "download") {
+        seasonalViews = [];
+        for (let i = 0; i < rawSeasonalViews.length; i++) {
+          const view = rawSeasonalViews[i];
+          setExportProgressText(`正在生成 ${view.season} 风格图（${i + 1}/${rawSeasonalViews.length}）...`);
+          setExportProgressValue(15 + Math.round(((i + 1) / rawSeasonalViews.length) * 60));
+          const stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle);
+          seasonalViews.push({
+            ...view,
+            frontalPng: stylized.imageDataUrl,
+          });
+        }
+      } else {
+        setExportProgressValue(55);
+      }
+
+      setExportProgressText("正在生成植物清单和布局说明...");
+      setExportProgressValue(80);
+      const plants = buildDesignReportPlantRows(garden, allVariants);
+      const layoutSvg = buildDesignLayoutSvg(garden, allVariants);
+      const html = buildDesignReportHtml({
+        title: "Garden Design Report",
+        garden,
+        plants,
+        layoutSvg,
+        seasonalViews,
+      });
+
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      a.href = url;
+      a.download = `garden-design-report-${stamp}.html`;
+      setExportProgressText("设计说明已生成，正在下载...");
+      setExportProgressValue(96);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportProgressText("");
+      setExportProgressValue(null);
+      window.setTimeout(() => setIsExportingReport(false), 0);
+    }
   }
 
   function triggerImport() {
@@ -614,67 +734,105 @@ export default function App() {
 
   return (
     <div style={{ padding: 16, maxWidth: 1800, margin: "0 auto" }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <label>
-          Rows:
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "inline-flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap",
+            padding: "8px 10px",
+            borderRadius: 12,
+            background: "#faf7f1",
+            border: "1px solid #e2ddd2",
+          }}
+        >
+          <label>
+            Rows:
+            <input
+              type="number"
+              min={1}
+              value={rowsInput}
+              onChange={(e) => setRowsInput(Number(e.target.value))}
+              style={{ width: 70, marginLeft: 6 }}
+            />
+          </label>
+          <label>
+            Cols:
+            <input
+              type="number"
+              min={1}
+              value={colsInput}
+              onChange={(e) => setColsInput(Number(e.target.value))}
+              style={{ width: 70, marginLeft: 6 }}
+            />
+          </label>
+          <label>
+            Zone:
+            <input
+              type="number"
+              min={1}
+              max={13}
+              value={zoneInput}
+              onChange={(e) => setZoneInput(Number(e.target.value))}
+              style={{ width: 70, marginLeft: 6 }}
+            />
+          </label>
+          <button onClick={applySize}>应用</button>
+          <button onClick={clearAllPlants}>清空全部植物</button>
+          <button onClick={triggerImport}>导入布局文件</button>
           <input
-            type="number"
-            min={1}
-            value={rowsInput}
-            onChange={(e) => setRowsInput(Number(e.target.value))}
-            style={{ width: 70, marginLeft: 6 }}
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,text/plain"
+            onChange={onImportFile}
+            style={{ display: "none" }}
           />
-        </label>
-        <label>
-          Cols:
-          <input
-            type="number"
-            min={1}
-            value={colsInput}
-            onChange={(e) => setColsInput(Number(e.target.value))}
-            style={{ width: 70, marginLeft: 6 }}
-          />
-        </label>
-        <label>
-          Zone:
-          <input
-            type="number"
-            min={1}
-            max={13}
-            value={zoneInput}
-            onChange={(e) => setZoneInput(Number(e.target.value))}
-            style={{ width: 70, marginLeft: 6 }}
-          />
-        </label>
-        <button onClick={applySize}>应用</button>
-        <button onClick={clearAllPlants}>清空全部植物</button>
-        <button onClick={exportLayout}>导出布局文件</button>
-        <button onClick={exportFrontViewPng}>导出 FrontView PNG</button>
-        <button onClick={triggerImport}>导入布局文件</button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".txt,text/plain"
-          onChange={onImportFile}
-          style={{ display: "none" }}
-        />
+        </div>
+        <div
+          style={{
+            display: "inline-flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap",
+            padding: "8px 10px",
+            borderRadius: 12,
+            background: "#f5f8f2",
+            border: "1px solid #d7e2d1",
+          }}
+        >
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <select
+              value={garden.season}
+              onChange={(e) => setGarden((g) => ({ ...g, season: e.target.value as Season }))}
+              style={{ height: 30 }}
+            >
+              <option value="spring">spring</option>
+              <option value="summer">summer</option>
+              <option value="autumn">autumn</option>
+              <option value="winter">winter</option>
+            </select>
+            <select
+              value={frontViewExportStyle}
+              onChange={(e) => setFrontViewExportStyle(e.target.value as FrontViewExportStyle)}
+              style={{ height: 30 }}
+            >
+              <option value="download">原图</option>
+              <option value="monet">莫奈</option>
+              <option value="watercolor">水彩</option>
+              <option value="vangogh">梵高</option>
+            </select>
+          </div>
+          <button onClick={exportFrontViewPng} disabled={isStylizingFrontView}>
+            {isStylizingFrontView ? "正在生成风格图..." : "导出效果图"}
+          </button>
+          <button onClick={exportDesignReport} disabled={isExportingReport}>
+            {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
+          </button>
+        </div>
       </div>
 
       <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        {(["spring", "summer", "autumn", "winter"] as Season[]).map((s) => (
-          <button key={s} onClick={() => setGarden((g) => ({ ...g, season: s }))}>
-            {s}
-          </button>
-        ))}
-        <button
-          onClick={() => setMonetMode((prev) => !prev)}
-          style={{
-            border: monetMode ? "1px solid #6b7f59" : "1px solid #d9d9d9",
-            background: monetMode ? "#eef4e7" : "#fff",
-          }}
-        >
-          {monetMode ? "Monet On" : "Monet Off"}
-        </button>
         <span style={{ fontSize: 13, color: "#444", marginLeft: 8 }}>View Angle</span>
         <input
           type="range"
@@ -725,6 +883,83 @@ export default function App() {
       ) : null}
 
       <div
+        style={{
+          position: "fixed",
+          left: -20000,
+          top: 0,
+          width: reportCanvasWidth,
+          height: 10,
+          overflow: "hidden",
+          visibility: "hidden",
+          pointerEvents: "none",
+        }}
+      >
+        {reportSeasons.map((season) => {
+          const seasonalGarden = { ...garden, season };
+          const frontalRef =
+            season === "spring"
+              ? springFrontalReportFrontViewRef
+              : season === "summer"
+                ? summerFrontalReportFrontViewRef
+                : season === "autumn"
+                  ? autumnFrontalReportFrontViewRef
+                  : winterFrontalReportFrontViewRef;
+          return (
+            <div key={season}>
+              <FrontView
+                ref={frontalRef}
+                garden={seasonalGarden}
+                colGap={frontalMetrics.colGap}
+                rowGap={frontalMetrics.rowGap}
+                monetMode={false}
+                canvasWidth={reportCanvasWidth}
+                showEditGrid={false}
+              />
+            </div>
+          );
+        })}
+      </div>
+      {isGeneratingLayout || isExportingReport || isStylizingFrontView ? (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "10px 12px",
+            borderRadius: 10,
+            background: "#f5f8f2",
+            border: "1px solid #d7e2d1",
+            color: "#4f5f4f",
+            fontSize: 13,
+          }}
+        >
+          {exportProgressValue !== null ? (
+            <div
+              style={{
+                height: 6,
+                borderRadius: 999,
+                background: "#dbe6d5",
+                overflow: "hidden",
+                marginBottom: 8,
+              }}
+            >
+              <div
+                style={{
+                  width: `${exportProgressValue}%`,
+                  height: "100%",
+                  background: "#6e8f72",
+                  transition: "width 180ms ease",
+                }}
+              />
+            </div>
+          ) : null}
+          {isGeneratingLayout
+            ? "正在生成布局，请稍等..."
+            : isExportingReport
+              ? exportProgressText || "正在整理并导出设计说明，请稍等..."
+              : exportProgressText || "正在调用风格化接口并下载图片，请稍等..."}
+        </div>
+      ) : null}
+
+      <div
         ref={editorRef}
         style={{
           display: "flex",
@@ -747,7 +982,7 @@ export default function App() {
             garden={garden}
             colGap={colGap}
             rowGap={rowGap}
-            monetMode={monetMode}
+            monetMode={false}
             canvasWidth={canvasWidth}
             showEditGrid={editMode}
             selectedCell={selectedCell}
@@ -851,10 +1086,10 @@ export default function App() {
                 </div>
                 <button
                   onClick={autoGenerate}
-                  disabled={allVariants.length === 0}
+                  disabled={allVariants.length === 0 || isGeneratingLayout}
                   style={{ width: "100%", padding: "10px 12px", marginBottom: 14, borderRadius: 10 }}
                 >
-                  自动生成布局
+                  {isGeneratingLayout ? "正在生成布局..." : "自动生成布局"}
                 </button>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>

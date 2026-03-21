@@ -26,7 +26,7 @@ export function createGarden(rows = 20, cols = 20, zone = 7): GardenState {
     rows,
     cols,
     cells,
-    season: 'spring',
+    season: 'summer',
     zone,
   }
 }

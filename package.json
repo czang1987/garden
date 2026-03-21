@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite --host",
+    "dev:stylize": "node server/index.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "scrape:homedepot": "node scripts/scrape-homedepot-playwright.mjs",
