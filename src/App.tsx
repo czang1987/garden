@@ -271,6 +271,7 @@ export default function App() {
       ).sort(),
     [categories]
   );
+  const isCatalogLoading = categories.length === 0;
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -520,17 +521,25 @@ export default function App() {
   async function autoGenerate() {
     if (isGeneratingLayout) return;
     setIsGeneratingLayout(true);
+    setExportProgressText("正在准备自动生成布局...");
+    setExportProgressValue(15);
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     try {
+      setExportProgressText("正在根据当前约束生成布局...");
+      setExportProgressValue(60);
       setGarden((prev) =>
         generateAutoLayout(prev, allVariants, {
           targetCoverage: 0.62,
           designIntent,
         })
       );
+      setExportProgressText("布局已生成，正在刷新视图...");
+      setExportProgressValue(95);
       setEditMode(false);
       setSelectedCell(null);
     } finally {
+      setExportProgressText("");
+      setExportProgressValue(null);
       window.setTimeout(() => setIsGeneratingLayout(false), 0);
     }
   }
@@ -830,6 +839,13 @@ export default function App() {
               <option value="monet">莫奈</option>
               <option value="watercolor">水彩</option>
               <option value="vangogh">梵高</option>
+              <option value="architectural">景观效果图</option>
+              <option value="botanical">植物学插画</option>
+              <option value="pastel">粉彩</option>
+              <option value="gouache">水粉</option>
+              <option value="inkwash">水墨淡彩</option>
+              <option value="storybook">绘本插画</option>
+              <option value="coloredpencil">彩铅</option>
             </select>
           </div>
           <button onClick={exportFrontViewPng} disabled={isStylizingFrontView}>
@@ -961,10 +977,24 @@ export default function App() {
             </div>
           ) : null}
           {isGeneratingLayout
-            ? "正在生成布局，请稍等..."
+            ? exportProgressText || "正在生成布局，请稍等..."
             : isExportingReport
               ? exportProgressText || "正在整理并导出设计说明，请稍等..."
               : exportProgressText || "正在调用风格化接口并下载图片，请稍等..."}
+        </div>
+      ) : isCatalogLoading ? (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "10px 12px",
+            borderRadius: 10,
+            background: "#faf7f1",
+            border: "1px solid #e2ddd2",
+            color: "#766a58",
+            fontSize: 13,
+          }}
+        >
+          正在加载植物库，请稍等...
         </div>
       ) : null}
 
@@ -1098,7 +1128,11 @@ export default function App() {
                   disabled={allVariants.length === 0 || isGeneratingLayout}
                   style={{ width: "100%", padding: "10px 12px", marginBottom: 14, borderRadius: 10 }}
                 >
-                  {isGeneratingLayout ? "正在生成布局..." : "自动生成布局"}
+                  {isCatalogLoading
+                    ? "正在加载植物库..."
+                    : isGeneratingLayout
+                      ? "正在生成布局..."
+                      : "自动生成布局"}
                 </button>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>

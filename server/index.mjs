@@ -11,6 +11,20 @@ const PROMPTS = {
     "Transform this garden front-view design into a refined landscape watercolor rendering. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and spatial structure. Use transparent watercolor washes, soft edges, subtle pigment blooms, gentle color bleeding, light paper texture, and a natural hand-painted landscape illustration style. Keep the planting layout clearly readable. Avoid cartoon style, anime style, and heavy digital painting effects.",
   vangogh:
     "Transform this garden front-view design into a Van Gogh-inspired post-impressionist oil painting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same layout and structure, only change the visual style to expressive brushstrokes, bold painterly texture, and Van Gogh-like color energy.",
+  architectural:
+    "Transform this garden front-view design into a refined professional landscape architectural rendering. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and spatial structure. Use clean atmospheric rendering, soft realistic lighting, controlled textures, elegant presentation, and a polished landscape design visualization style. Keep the plants readable and the layout highly recognizable.",
+  botanical:
+    "Transform this garden front-view design into a botanical illustration. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and structure. Use delicate botanical painting detail, refined hand-rendered texture, soft natural color, light paper feel, and an elegant scientific-illustration quality while keeping the layout clearly readable.",
+  pastel:
+    "Transform this garden front-view design into a soft pastel painting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same layout and structure. Use gentle pastel color transitions, powdery texture, soft edges, atmospheric light, and a dreamy hand-painted quality. Keep plant masses readable.",
+  gouache:
+    "Transform this garden front-view design into a gouache painting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same layout and structure. Use rich matte gouache texture, layered opaque brushwork, simplified but readable plant masses, and an elegant hand-painted garden illustration style.",
+  inkwash:
+    "Transform this garden front-view design into a Chinese ink wash and light color painting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same layout and structure. Use expressive ink wash texture, restrained color accents, soft bleeding edges, rice-paper atmosphere, and a graceful traditional painting feeling while keeping the garden layout readable.",
+  storybook:
+    "Transform this garden front-view design into a refined storybook illustration. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same layout and structure. Use charming hand-painted illustration texture, warm color harmony, soft edges, and a polished picture-book quality without turning the scene into cartoon exaggeration.",
+  coloredpencil:
+    "Transform this garden front-view design into a colored pencil rendering. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same layout and structure. Use layered colored pencil strokes, subtle paper grain, delicate shading, and an elegant hand-rendered garden study style. Keep plant forms clear and readable.",
 };
 
 function sendJson(res, status, data) {
@@ -24,7 +38,7 @@ function sendJson(res, status, data) {
 }
 
 function normalizeStyle(style) {
-  return ["monet", "watercolor", "vangogh"].includes(style) ? style : null;
+  return ["monet", "watercolor", "vangogh", "architectural", "botanical", "pastel", "gouache", "inkwash", "storybook", "coloredpencil"].includes(style) ? style : null;
 }
 
 function splitDataUrl(dataUrl) {

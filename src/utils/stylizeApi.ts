@@ -1,4 +1,15 @@
-export type FrontViewExportStyle = "download" | "monet" | "watercolor" | "vangogh";
+export type FrontViewExportStyle =
+  | "download"
+  | "monet"
+  | "watercolor"
+  | "vangogh"
+  | "architectural"
+  | "botanical"
+  | "pastel"
+  | "gouache"
+  | "inkwash"
+  | "storybook"
+  | "coloredpencil";
 
 export async function stylizeFrontViewImage(
   imageDataUrl: string,
