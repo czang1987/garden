@@ -1,7 +1,7 @@
 import type { GardenState } from "../store/garden";
 import type { DesignIntent } from "../type/designIntent";
 import type { PlantVariant } from "../type/plants";
-import { canPlaceFootprint, footprintBounds, footprintCells, markFootprint } from "./footprint";
+import { buildOccupancyGrid, canPlaceFootprint, footprintBounds, footprintCells, markFootprint } from "./footprint";
 import { plantSupportsZone } from "./zone";
 
 type ScoreBreakdown = {
@@ -129,8 +129,8 @@ function symmetryPositionFactor(
     return 1 + strength * 0.1;
   }
 
-  const maxRowDistance = Math.max(1, Math.round(rows * 0.1));
-  const maxColDistance = Math.max(1, Math.round(cols * 0.1));
+ // const maxRowDistance = Math.max(1, Math.round(rows * 0.1));
+ // const maxColDistance = Math.max(1, Math.round(cols * 0.1));
   let hasMirror = false;
 
   for (const item of placed) {
@@ -146,8 +146,8 @@ function symmetryPositionFactor(
         item.r,
         item.c,
         existingFp,
-        maxRowDistance,
-        maxColDistance
+        0,
+        0
       )
     ) {
       hasMirror = true;
@@ -156,10 +156,46 @@ function symmetryPositionFactor(
   }
 
   if (hasMirror) {
-    return 1 + strength * (0.35 + 0.75 * centerWeight);
+  //  return 1 + strength * (0.35 + 0.75 * centerWeight);
+    return Math.max(1,1*strength)
+  }
+  return Math.max(1,(1-0.12*centerDistance)*strength)
+//  return Math.max(0.78, 1 - strength * 0.12 * centerWeight);
+}
+
+export function topSymmetryCandidateCells(
+  garden: GardenState,
+  variants: PlantVariant[],
+  symmetryStrength: number,
+  limit?: number
+) {
+  const strength = clamp01(symmetryStrength);
+  if (strength <= 0 || limit <= 0) return [];
+
+  const variantMap = new Map(variants.map((variant) => [variant.id, variant] as const));
+  const placed: Placed[] = garden.cells
+    .filter((cell) => cell.plant && cell.plant !== "empty")
+    .map((cell) => ({ r: cell.row, c: cell.col, id: cell.plant }));
+  const occupancy = buildOccupancyGrid(garden, variants);
+
+  const candidates: Array<{ r: number; c: number; score: number }> = [];
+  for (let r = 0; r < garden.rows; r++) {
+    for (let c = 0; c < garden.cols; c++) {
+      if (occupancy[r]?.[c]) continue;
+      const score = symmetryPositionFactor(r, c, garden.cols, garden.rows, placed, strength, variantMap);
+      if (score < 1) continue;
+      candidates.push({ r, c, score });
+    }
   }
 
-  return Math.max(0.78, 1 - strength * 0.12 * centerWeight);
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (a.r !== b.r) return a.r - b.r;
+    return a.c - b.c;
+  });
+
+  const output = typeof limit === "number" ? candidates.slice(0, limit) : candidates;
+  return output.map(({ r, c, score }) => ({ r, c, score }));
 }
 
 function pickWeightedPosition(

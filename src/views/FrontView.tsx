@@ -8,6 +8,7 @@ const BASE_HEIGHT_UNIT_SCALE = 2;
 const SHOW_DEBUG_GRID = false;
 const SHOW_DEBUG_PLANT_BOUNDS = false;
 const SHOW_DEBUG_OCCUPIED_CELLS = true;
+const SHOW_SYMMETRY_HINTS = false;
 const ENABLE_SWAY = true;
 const FRAME = 36;
 
@@ -49,6 +50,7 @@ type FrontViewProps = {
   monetMode?: boolean;
   showEditGrid?: boolean;
   selectedCell?: { r: number; c: number } | null;
+  symmetryHints?: Array<{ r: number; c: number; score?: number }>;
   onCellSelect?: (cell: { r: number; c: number }) => void;
   onCanvasBackgroundClick?: () => void;
   canvasWidth?: number;
@@ -409,6 +411,29 @@ function drawOccupiedCells(
   layer.addChild(g);
 }
 
+function drawSymmetryHints(
+  layer: PIXI.Container,
+  hints: Array<{ r: number; c: number; score?: number }>,
+  rowGap: number,
+  colGap: number,
+  baseX: number,
+  baseY: number
+) {
+  const g = new PIXI.Graphics();
+  for (const hint of hints) {
+    g.rect(baseX + hint.c * colGap, baseY + hint.r * rowGap, colGap, rowGap).fill({
+      color: 0xc73c32,
+      alpha: 0.24,
+    });
+    g.rect(baseX + hint.c * colGap, baseY + hint.r * rowGap, colGap, rowGap).stroke({
+      color: 0xff5b4d,
+      width: 2,
+      alpha: 0.95,
+    });
+  }
+  layer.addChild(g);
+}
+
 export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function FrontView(
   {
     garden,
@@ -417,6 +442,7 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     monetMode = false,
     showEditGrid = false,
     selectedCell = null,
+    symmetryHints = [],
     onCellSelect,
     onCanvasBackgroundClick,
     canvasWidth = 980,
@@ -664,6 +690,10 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
         drawOccupiedCells(debugGridLayer, garden.cells, variantMap, rowGap, colGap, baseX, baseY, garden.rows, garden.cols);
       }
 
+      if (SHOW_SYMMETRY_HINTS && showEditGrid && symmetryHints.length > 0) {
+        drawSymmetryHints(debugGridLayer, symmetryHints, rowGap, colGap, baseX, baseY);
+      }
+
       if (SHOW_DEBUG_GRID) {
         drawDebugGrid(debugGridLayer, garden.rows, garden.cols, rowGap, colGap, baseX, baseY);
       }
@@ -743,7 +773,7 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     return () => {
       canceled = true;
     };
-  }, [appReady, baseX, baseY, canvasH, canvasWidth, colGap, garden, gridH, gridW, monetMode, rowGap, selectedCell, showEditGrid, variantMap]);
+  }, [appReady, baseX, baseY, canvasH, canvasWidth, colGap, garden, gridH, gridW, monetMode, rowGap, selectedCell, showEditGrid, symmetryHints, variantMap]);
 
   return (
     <div ref={mountRef} style={{ width: canvasWidth, minHeight: canvasH, position: "relative" }}>

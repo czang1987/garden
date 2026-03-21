@@ -14,6 +14,7 @@ import {
   prunePlantsByZone,
   relativeHeightFactor,
   scoreLayout,
+  topSymmetryCandidateCells,
 } from "./utils/layoutEngine";
 import { buildOccupancyGrid, footprintCells } from "./utils/footprint";
 import { buildLayoutFile, formatLayoutFileAsReadableText, parseLayoutText } from "./utils/layoutIo";
@@ -231,6 +232,10 @@ export default function App() {
       back: counts.back.total ? counts.back.used / counts.back.total : 0,
     };
   }, [garden.cols, garden.rows, occupancy]);
+  const symmetryHints = useMemo(
+    () => topSymmetryCandidateCells(garden, allVariants, designIntent.layout.symmetry),
+    [allVariants, designIntent.layout.symmetry, garden]
+  );
 
   const canvasWidth = Math.max(520, frontPaneWidth - 4);
   const frameThickness = 36;
@@ -313,8 +318,7 @@ export default function App() {
 
     const nextPlantId = plantId ?? "empty";
     if ((resolved?.anchor.plant ?? target?.plant) === nextPlantId) {
-      setEditMode(false);
-      setSelectedCell(null);
+      setEditMode(true);
       return;
     }
 
@@ -352,8 +356,7 @@ export default function App() {
     }
 
     setGarden(next);
-    setEditMode(false);
-    setSelectedCell(null);
+    setEditMode(true);
   }
 
   function applySize() {
@@ -621,6 +624,7 @@ export default function App() {
             canvasWidth={canvasWidth}
             showEditGrid={editMode}
             selectedCell={selectedCell}
+            symmetryHints={symmetryHints}
             onCellSelect={(cell) => {
               setEditMode(true);
               setSelectedCell(cell);
