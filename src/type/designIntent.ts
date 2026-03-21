@@ -13,6 +13,7 @@ export type DesignIntent = {
   };
   layout: {
     symmetry: number;
+    clusteriness: number;
   };
 };
 
@@ -31,5 +32,6 @@ export const DEFAULT_DESIGN_INTENT: DesignIntent = {
   },
   layout: {
     symmetry: 0,
+    clusteriness: 0.35,
   },
 };

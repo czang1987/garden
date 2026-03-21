@@ -107,6 +107,70 @@ function symmetryFactor(
   return Math.max(0.72, 1 - strength * 0.2 * centerWeight);
 }
 
+function clusterFactor(
+  candidate: PlantVariant,
+  candidateRow: number,
+  candidateCol: number,
+  placed: Placed[],
+  variantMap: Map<string, PlantVariant>,
+  clusteriness: number
+) {
+  const strength = clamp01(clusteriness);
+  if (strength <= 0) return 1;
+
+  let samePlantBoost = 0;
+  let sameCategoryBoost = 0;
+  let sameColorBoost = 0;
+  let otherPlantPenalty = 0;
+
+  for (const item of placed) {
+    const existingVariant = variantMap.get(item.id);
+    if (!existingVariant) continue;
+
+    const rowDistance = Math.abs(item.r - candidateRow);
+    const colDistance = Math.abs(item.c - candidateCol);
+    const distance = rowDistance + colDistance;
+    if (distance === 0 || distance > 6) continue;
+
+    const closeness = 1 / distance;
+    if (item.id === candidate.id) {
+      samePlantBoost = Math.max(samePlantBoost, closeness);
+    } else if (
+      candidate.categoryId &&
+      existingVariant.categoryId &&
+      candidate.categoryId === existingVariant.categoryId
+    ) {
+      sameCategoryBoost = Math.max(sameCategoryBoost, closeness);
+    } else if (
+      candidate.color &&
+      existingVariant.color &&
+      candidate.color.toLowerCase() === existingVariant.color.toLowerCase()
+    ) {
+      sameColorBoost = Math.max(sameColorBoost, closeness);
+    } else {
+      otherPlantPenalty = Math.max(otherPlantPenalty, closeness);
+    }
+  }
+
+  if (samePlantBoost > 0) {
+    return 1 + strength * Math.min(1.25, samePlantBoost * 1.6);
+  }
+
+  if (sameCategoryBoost > 0) {
+    return 1 + strength * Math.min(0.7, sameCategoryBoost * 0.9);
+  }
+
+  if (sameColorBoost > 0) {
+    return 1 + strength * Math.min(0.45, sameColorBoost * 0.65);
+  }
+
+  if (otherPlantPenalty > 0) {
+    return Math.max(0.82, 1 - strength * Math.min(0.35, otherPlantPenalty * 0.22));
+  }
+
+  return 1;
+}
+
 function symmetryPositionFactor(
   candidateRow: number,
   candidateCol: number,
@@ -167,7 +231,7 @@ export function topSymmetryCandidateCells(
   garden: GardenState,
   variants: PlantVariant[],
   symmetryStrength: number,
-  limit?: number
+  limit: number
 ) {
   const strength = clamp01(symmetryStrength);
   if (strength <= 0 || limit <= 0) return [];
@@ -562,6 +626,7 @@ function pickWeighted(
   backMaxHeight: number,
   heightGradientStrength: number,
   symmetryStrength: number,
+  clusteriness: number,
   occupiedByBand: BandCounts,
   totalByBand: BandCounts,
   targetByBand: BandCounts,
@@ -592,6 +657,14 @@ function pickWeighted(
       variantMap,
       heightGradientStrength
     );
+    const clusterinessFactor = clusterFactor(
+      v,
+      candidateRow,
+      candidateCol,
+      placed,
+      variantMap,
+      clusteriness
+    );
     const mirrorFactor = symmetryFactor(v, candidateRow, candidateCol, cols, rows, placed, symmetryStrength,variantMap);
     const base = 1 + ((i % 5) * 0.03);
     return {
@@ -599,8 +672,16 @@ function pickWeighted(
       heightFactor: heightFactor * zoneFactor,
       bandDensityFactor,
       placementFactor,
+      clusterinessFactor,
       mirrorFactor,
-      weight: base * placementFactor * heightFactor * zoneFactor * bandDensityFactor * mirrorFactor,
+      weight:
+        base *
+        placementFactor *
+        heightFactor *
+        zoneFactor *
+        bandDensityFactor *
+        clusterinessFactor *
+        mirrorFactor,
     };
   });
   const sum = weightedCandidates.reduce((a, b) => a + b.weight, 0);
@@ -615,6 +696,7 @@ function pickWeighted(
         col: candidateCol,
         plantId: chosen.variant.id,
         placementFactor: Number(chosen.placementFactor.toFixed(4)),
+        clusterinessFactor: Number(chosen.clusterinessFactor.toFixed(4)),
         mirrorFactor: Number(chosen.mirrorFactor.toFixed(4)),
         weight: Number(chosen.weight.toFixed(4)),
       });
@@ -627,6 +709,7 @@ function pickWeighted(
     col: candidateCol,
     plantId: fallback.variant.id,
     placementFactor: Number(fallback.placementFactor.toFixed(4)),
+    clusterinessFactor: Number(fallback.clusterinessFactor.toFixed(4)),
     mirrorFactor: Number(fallback.mirrorFactor.toFixed(4)),
     weight: Number(fallback.weight.toFixed(4)),
     fallback: true,
@@ -650,6 +733,7 @@ export function generateAutoLayout(
   const backMaxHeight = designIntent?.height.backMax ?? 200;
   const heightGradientStrength = designIntent?.height.gradientStrength ?? 1;
   const symmetryStrength = designIntent?.layout.symmetry ?? 0;
+  const clusteriness = designIntent?.layout.clusteriness ?? 0.35;
   const total = rows * cols;
   const targetCoverage = clamp01(options.targetCoverage ?? 0.62);
   const targetOccupiedCells = Math.max(1, Math.floor(total * targetCoverage));
@@ -738,6 +822,7 @@ export function generateAutoLayout(
       backMaxHeight,
       heightGradientStrength,
       symmetryStrength,
+      clusteriness,
       occupiedByBand,
       totalByBand,
       targetByBand,

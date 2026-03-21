@@ -4,6 +4,9 @@ export type PlantVariant = {
   id: string;
   name: string;
   icon: string;
+  categoryId?: string;
+  categoryName?: string;
+  color?: string;
   link?: string;
   zone?: string;
   baseHeight: number;

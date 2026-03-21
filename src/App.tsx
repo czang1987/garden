@@ -206,7 +206,15 @@ export default function App() {
 
   const allVariants = useMemo(() => {
     const out: PlantVariant[] = [];
-    for (const cat of categories) out.push(...cat.variants);
+    for (const cat of categories) {
+      out.push(
+        ...cat.variants.map((variant) => ({
+          ...variant,
+          categoryId: cat.id,
+          categoryName: cat.name,
+        }))
+      );
+    }
     return out;
   }, [categories]);
 
@@ -812,6 +820,25 @@ export default function App() {
                       setDesignIntent((prev) => ({
                         ...prev,
                         layout: { ...prev.layout, symmetry: Number(e.target.value) },
+                      }))
+                    }
+                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
+                  />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                    Clusteriness: {designIntent.layout.clusteriness.toFixed(2)}
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={designIntent.layout.clusteriness}
+                    onChange={(e) =>
+                      setDesignIntent((prev) => ({
+                        ...prev,
+                        layout: { ...prev.layout, clusteriness: Number(e.target.value) },
                       }))
                     }
                     style={{ width: Math.max(120, catalogPaneWidth - 32) }}
