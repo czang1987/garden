@@ -15,6 +15,9 @@ export type DesignIntent = {
     symmetry: number;
     clusteriness: number;
   };
+  color: {
+    preferences: Record<string, number>;
+  };
 };
 
 export const DEFAULT_DESIGN_INTENT: DesignIntent = {
@@ -33,5 +36,8 @@ export const DEFAULT_DESIGN_INTENT: DesignIntent = {
   layout: {
     symmetry: 0,
     clusteriness: 0.35,
+  },
+  color: {
+    preferences: {},
   },
 };

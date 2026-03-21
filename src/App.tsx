@@ -130,6 +130,110 @@ function DualSlider({
   );
 }
 
+function ColorDotSelect({
+  value,
+  colors,
+  onChange,
+}: {
+  value: string;
+  colors: string[];
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} style={{ position: "relative", flex: "0 0 28px" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-label="selected color preference"
+        title={value || "select color"}
+        style={{
+          width: 28,
+          height: 28,
+          padding: 0,
+          borderRadius: 999,
+          border: "1px solid rgba(0,0,0,0.18)",
+          background: value || "#ffffff",
+          boxShadow: !value || value === "white" ? "inset 0 0 0 1px rgba(0,0,0,0.08)" : undefined,
+          cursor: "pointer",
+        }}
+      />
+      {open ? (
+        <div
+          style={{
+            position: "absolute",
+            top: 34,
+            left: 0,
+            zIndex: 30,
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 18px)",
+            gap: 6,
+            padding: 8,
+            borderRadius: 10,
+            border: "1px solid #d8d0c2",
+            background: "#fffdf8",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              onChange("");
+              setOpen(false);
+            }}
+            title="clear"
+            style={{
+              width: 18,
+              height: 18,
+              padding: 0,
+              borderRadius: 999,
+              border: !value ? "2px solid #ffffff" : "1px solid rgba(0,0,0,0.18)",
+              outline: !value ? "1px solid #2f3d2f" : "none",
+              background: "linear-gradient(135deg, #ffffff 0 45%, #d9d1c2 45% 55%, #ffffff 55% 100%)",
+              cursor: "pointer",
+            }}
+          />
+          {colors.map((color) => (
+            <button
+              key={color}
+              type="button"
+              onClick={() => {
+                onChange(color);
+                setOpen(false);
+              }}
+              title={color}
+              style={{
+                width: 18,
+                height: 18,
+                padding: 0,
+                borderRadius: 999,
+                border: value === color ? "2px solid #ffffff" : "1px solid rgba(0,0,0,0.18)",
+                outline: value === color ? "1px solid #2f3d2f" : "none",
+                background: color,
+                boxShadow: color === "white" ? "inset 0 0 0 1px rgba(0,0,0,0.08)" : undefined,
+                cursor: "pointer",
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function App() {
   const [garden, setGarden] = useState<GardenState>(createGarden(20, 20));
   const [rowGapRatio, setRowGapRatio] = useState(0.77);
@@ -145,6 +249,21 @@ export default function App() {
   const [designIntent, setDesignIntent] = useState<DesignIntent>(DEFAULT_DESIGN_INTENT);
   const [lastDensityBand, setLastDensityBand] = useState<"front" | "middle" | "back" | null>(null);
   const [rightPanel, setRightPanel] = useState<"catalog" | "auto">("catalog");
+  const [selectedColorPreference, setSelectedColorPreference] = useState("");
+
+  const availableColors = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          categories.flatMap((cat) =>
+            cat.variants
+              .map((variant) => variant.color?.trim().toLowerCase())
+              .filter((color): color is string => !!color)
+          )
+        )
+      ).sort(),
+    [categories]
+  );
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -843,6 +962,39 @@ export default function App() {
                     }
                     style={{ width: Math.max(120, catalogPaneWidth - 32) }}
                   />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Color Preference</div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <ColorDotSelect
+                      value={selectedColorPreference}
+                      colors={availableColors}
+                      onChange={setSelectedColorPreference}
+                    />
+                    <input
+                      type="range"
+                      min={-1}
+                      max={1}
+                      step={0.01}
+                      value={selectedColorPreference ? designIntent.color.preferences[selectedColorPreference] ?? 0 : 0}
+                      onChange={(e) => {
+                        if (!selectedColorPreference) return;
+                        setDesignIntent((prev) => ({
+                          ...prev,
+                          color: {
+                            preferences: {
+                              ...prev.color.preferences,
+                              [selectedColorPreference]: Number(e.target.value),
+                            },
+                          },
+                        }));
+                      }}
+                      style={{ flex: "1 1 auto", minWidth: 0 }}
+                    />
+                    <span style={{ width: 36, textAlign: "right", fontSize: 12, color: "#666" }}>
+                      {(selectedColorPreference ? designIntent.color.preferences[selectedColorPreference] ?? 0 : 0).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
                 <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: "#2f3d2f" }}>
                   前中后排密度

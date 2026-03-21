@@ -171,6 +171,16 @@ function clusterFactor(
   return 1;
 }
 
+function colorBiasFactor(candidate: PlantVariant, preferences: Record<string, number>) {
+  const normalizedColor = candidate.color?.trim().toLowerCase() ?? "";
+  if (!normalizedColor) return 1;
+  const preference = Math.max(-1, Math.min(1, preferences[normalizedColor] ?? 0));
+  if (preference <= -1) return 0;
+  if (preference === 0) return 1;
+  if (preference > 0) return 1 + preference * 1.15;
+  return Math.max(0.05, 1 + preference * 0.95);
+}
+
 function symmetryPositionFactor(
   candidateRow: number,
   candidateCol: number,
@@ -231,10 +241,10 @@ export function topSymmetryCandidateCells(
   garden: GardenState,
   variants: PlantVariant[],
   symmetryStrength: number,
-  limit: number
+  limit?: number
 ) {
   const strength = clamp01(symmetryStrength);
-  if (strength <= 0 || limit <= 0) return [];
+  if (strength <= 0 || (typeof limit === "number" && limit <= 0)) return [];
 
   const variantMap = new Map(variants.map((variant) => [variant.id, variant] as const));
   const placed: Placed[] = garden.cells
@@ -627,6 +637,7 @@ function pickWeighted(
   heightGradientStrength: number,
   symmetryStrength: number,
   clusteriness: number,
+  colorPreferences: Record<string, number>,
   occupiedByBand: BandCounts,
   totalByBand: BandCounts,
   targetByBand: BandCounts,
@@ -665,6 +676,7 @@ function pickWeighted(
       variantMap,
       clusteriness
     );
+    const colorFactor = colorBiasFactor(v, colorPreferences);
     const mirrorFactor = symmetryFactor(v, candidateRow, candidateCol, cols, rows, placed, symmetryStrength,variantMap);
     const base = 1 + ((i % 5) * 0.03);
     return {
@@ -673,6 +685,7 @@ function pickWeighted(
       bandDensityFactor,
       placementFactor,
       clusterinessFactor,
+      colorFactor,
       mirrorFactor,
       weight:
         base *
@@ -681,6 +694,7 @@ function pickWeighted(
         zoneFactor *
         bandDensityFactor *
         clusterinessFactor *
+        colorFactor *
         mirrorFactor,
     };
   });
@@ -697,6 +711,7 @@ function pickWeighted(
         plantId: chosen.variant.id,
         placementFactor: Number(chosen.placementFactor.toFixed(4)),
         clusterinessFactor: Number(chosen.clusterinessFactor.toFixed(4)),
+        colorFactor: Number(chosen.colorFactor.toFixed(4)),
         mirrorFactor: Number(chosen.mirrorFactor.toFixed(4)),
         weight: Number(chosen.weight.toFixed(4)),
       });
@@ -710,6 +725,7 @@ function pickWeighted(
     plantId: fallback.variant.id,
     placementFactor: Number(fallback.placementFactor.toFixed(4)),
     clusterinessFactor: Number(fallback.clusterinessFactor.toFixed(4)),
+    colorFactor: Number(fallback.colorFactor.toFixed(4)),
     mirrorFactor: Number(fallback.mirrorFactor.toFixed(4)),
     weight: Number(fallback.weight.toFixed(4)),
     fallback: true,
@@ -734,6 +750,7 @@ export function generateAutoLayout(
   const heightGradientStrength = designIntent?.height.gradientStrength ?? 1;
   const symmetryStrength = designIntent?.layout.symmetry ?? 0;
   const clusteriness = designIntent?.layout.clusteriness ?? 0.35;
+  const colorPreferences = designIntent?.color.preferences ?? {};
   const total = rows * cols;
   const targetCoverage = clamp01(options.targetCoverage ?? 0.62);
   const targetOccupiedCells = Math.max(1, Math.floor(total * targetCoverage));
@@ -823,6 +840,7 @@ export function generateAutoLayout(
       heightGradientStrength,
       symmetryStrength,
       clusteriness,
+      colorPreferences,
       occupiedByBand,
       totalByBand,
       targetByBand,
