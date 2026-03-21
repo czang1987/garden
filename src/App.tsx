@@ -624,7 +624,13 @@ export default function App() {
           const view = rawSeasonalViews[i];
           setExportProgressText(`正在生成 ${view.season} 风格图（${i + 1}/${rawSeasonalViews.length}）...`);
           setExportProgressValue(15 + Math.round(((i + 1) / rawSeasonalViews.length) * 60));
-          const stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle);
+          let stylized;
+          try {
+            stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`${view.season} 季效果图生成失败：${message}`);
+          }
           seasonalViews.push({
             ...view,
             frontalPng: stylized.imageDataUrl,
@@ -658,6 +664,9 @@ export default function App() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      alert(`导出设计说明失败：${message}`);
     } finally {
       setExportProgressText("");
       setExportProgressValue(null);
