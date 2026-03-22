@@ -176,8 +176,59 @@
             "autumn"
           ],
           "maintenance": 1
+        },
+        {
+          "id": "salvia",
+          "name": "鼠尾草",
+          "icon": "/assets/plants/salvia/summer.png",
+          "link": "https://www.lowes.com/pd/2-5-Quart-3-Pack-in-Pot-Sage-Sage/5013316635",
+          "baseWidth": 20,
+          "baseHeight": 24,
+          "zone": "3-11",
+          "footprint": [
+            2,
+            2
+          ],
+          "color": "purple",
+          "tags": [
+            "紫",
+            "香气"
+          ],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
+          "maintenance": 1
+        },
+        {
+          "id": "catmint",
+          "name": "猫薄荷",
+          "icon": "/assets/plants/catmint/summer.png",
+          "link": "https://www.lowes.com/pd/Spring-Hill-Nurseries-1-Pack-in-Bareroot-Purrsian-Blue-Catmint/1002649064",
+          "baseWidth": 30,
+          "baseHeight": 18,
+          "zone": "3-8",
+          "footprint": [
+            3,
+            3
+          ],
+          "color": "blue",
+          "tags": [
+            "吸引猫",
+            "香气"
+          ],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
+          "maintenance": 1
         }
       ]
+
     },
     {
       "id": "annual",
