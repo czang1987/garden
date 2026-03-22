@@ -359,6 +359,30 @@
           "maintenance": 1
         },
         {
+          "id": "lily_of_nile",
+          "name": "非洲百合",
+          "icon": "/assets/plants/lily_of_nile/summer.png",
+          "link": "https://www.lowes.com/pd/National-Plant-Network-Purple-Lily-Of-The-Nile-Plant-in-1-Gallon-Planter/5015356761",
+          "baseHeight": 48,
+          "baseWidth": 36,
+          "zone": "7-11",
+          "footprint": [
+            3,
+            3
+          ],
+          "color": "purple",
+          "evergreen": true,
+          "tags": [
+            
+          ],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": [
+            "summer"
+          ],
+          "maintenance": 1
+        },
+        {
           "id": "rudbeckia_black_eyed_susan",
           "name": "黑心金光菊",
           "icon": "/assets/plants/rudbeckia_black_eyed_susan/icon.png",

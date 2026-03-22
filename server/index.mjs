@@ -37,6 +37,26 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+function now() {
+  return new Date().toISOString();
+}
+
+function logInfo(message, extra) {
+  if (extra !== undefined) {
+    console.log(`[${now()}] ${message}`, extra);
+    return;
+  }
+  console.log(`[${now()}] ${message}`);
+}
+
+function logError(message, extra) {
+  if (extra !== undefined) {
+    console.error(`[${now()}] ${message}`, extra);
+    return;
+  }
+  console.error(`[${now()}] ${message}`);
+}
+
 function normalizeStyle(style) {
   return ["monet", "watercolor", "vangogh", "architectural", "botanical", "pastel", "gouache", "inkwash", "storybook", "coloredpencil"].includes(style) ? style : null;
 }
@@ -68,6 +88,12 @@ async function generateStylizedImage(imageDataUrl, style) {
 
   const { mimeType, base64 } = splitDataUrl(imageDataUrl);
   const inputDataUrl = `data:${mimeType};base64,${base64}`;
+  logInfo("Generating stylized image", {
+    style,
+    model: ARK_MODEL,
+    mimeType,
+    inputBytesApprox: Math.round((base64.length * 3) / 4),
+  });
 
   const generationRes = await fetch(`${ARK_BASE_URL}/images/generations`, {
     method: "POST",
@@ -88,12 +114,18 @@ async function generateStylizedImage(imageDataUrl, style) {
 
   if (!generationRes.ok) {
     const text = await generationRes.text();
+    logError("Volcengine generation request failed", { status: generationRes.status, style, body: text });
     throw new Error(`Volcengine request failed (${generationRes.status}): ${text}`);
   }
 
   const generationJson = await generationRes.json();
   const remoteUrl = generationJson?.data?.[0]?.url;
   const imageBase64 = generationJson?.data?.[0]?.b64_json;
+  logInfo("Volcengine generation request succeeded", {
+    style,
+    returnedUrl: !!remoteUrl,
+    returnedBase64: !!imageBase64,
+  });
 
   if (imageBase64) {
     return { imageDataUrl: `data:image/jpeg;base64,${imageBase64}` };
@@ -105,6 +137,7 @@ async function generateStylizedImage(imageDataUrl, style) {
 
   const imageRes = await fetch(remoteUrl);
   if (!imageRes.ok) {
+    logError("Generated image download failed", { status: imageRes.status, style, remoteUrl });
     throw new Error(`Failed to download generated image (${imageRes.status})`);
   }
   const arrayBuffer = await imageRes.arrayBuffer();
@@ -120,6 +153,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    logInfo("Incoming request", { method: req.method, url: req.url });
+
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
@@ -130,9 +165,22 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && req.url === "/api/styles") {
+      sendJson(res, 200, {
+        version: "2026-03-22-style-set-2",
+        styles: Object.keys(PROMPTS),
+      });
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/api/stylize") {
       const body = await readJsonBody(req);
       const style = normalizeStyle(body.style);
+      logInfo("Stylize request body parsed", {
+        style: body.style,
+        validStyle: !!style,
+        hasImageDataUrl: typeof body.imageDataUrl === "string",
+      });
       if (!style) {
         sendJson(res, 400, { error: "Invalid style" });
         return;
@@ -142,6 +190,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const result = await generateStylizedImage(body.imageDataUrl, style);
+      logInfo("Stylize request completed", { style });
       sendJson(res, 200, result);
       return;
     }
@@ -149,10 +198,17 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 404, { error: "Not found" });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    logError("Unhandled request error", { message });
     sendJson(res, 500, { error: message });
   }
 });
 
 server.listen(PORT, () => {
-  console.log(`Stylize server listening on http://localhost:${PORT}`);
+  logInfo(`Stylize server listening on http://localhost:${PORT}`);
+  logInfo("Supported styles", Object.keys(PROMPTS));
+  logInfo("Runtime configuration", {
+    port: PORT,
+    model: ARK_MODEL,
+    baseUrl: ARK_BASE_URL,
+  });
 });
