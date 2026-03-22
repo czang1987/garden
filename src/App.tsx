@@ -839,13 +839,11 @@ export default function App() {
               <option value="monet">莫奈</option>
               <option value="watercolor">水彩</option>
               <option value="vangogh">梵高</option>
+              <option value="ukiyoe">浮世绘</option>
+              <option value="animebg">动画背景</option>
               <option value="architectural">景观效果图</option>
               <option value="botanical">植物学插画</option>
               <option value="pastel">粉彩</option>
-              <option value="gouache">水粉</option>
-              <option value="inkwash">水墨淡彩</option>
-              <option value="storybook">绘本插画</option>
-              <option value="coloredpencil">彩铅</option>
             </select>
           </div>
           <button onClick={exportFrontViewPng} disabled={isStylizingFrontView}>

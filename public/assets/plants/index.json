@@ -186,8 +186,8 @@
           "baseHeight": 24,
           "zone": "3-11",
           "footprint": [
-            2,
-            2
+            3,
+            3
           ],
           "color": "purple",
           "tags": [
@@ -208,7 +208,7 @@
           "icon": "/assets/plants/catmint/summer.png",
           "link": "https://www.lowes.com/pd/Spring-Hill-Nurseries-1-Pack-in-Bareroot-Purrsian-Blue-Catmint/1002649064",
           "baseWidth": 30,
-          "baseHeight": 18,
+          "baseHeight": 20,
           "zone": "3-8",
           "footprint": [
             3,

@@ -3,13 +3,11 @@ export type FrontViewExportStyle =
   | "monet"
   | "watercolor"
   | "vangogh"
+  | "ukiyoe"
+  | "animebg"
   | "architectural"
   | "botanical"
-  | "pastel"
-  | "gouache"
-  | "inkwash"
-  | "storybook"
-  | "coloredpencil";
+  | "pastel";
 
 export async function stylizeFrontViewImage(
   imageDataUrl: string,
