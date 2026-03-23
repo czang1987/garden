@@ -14,6 +14,8 @@ export async function stylizeFrontViewImage(
   style: Exclude<FrontViewExportStyle, "download">
 ): Promise<{ imageDataUrl: string }> {
   const apiBase = (import.meta.env.VITE_STYLIZE_API_BASE as string | undefined)?.trim() || "http://localhost:8787";
+  const apiBaseRemote = (import.meta.env.VITE_STYLIZE_API_BASE_REMOTE as string | undefined)?.trim() || "";
+  console.log("[stylize] apiBase =", apiBase, "apiBaseRemote =", apiBaseRemote, "style =", style);
   const res = await fetch(`${apiBase}/api/stylize`, {
     method: "POST",
     headers: {

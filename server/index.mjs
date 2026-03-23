@@ -3,6 +3,7 @@ import http from "node:http";
 const PORT = Number(process.env.STYLIZE_PORT || 8787);
 const ARK_BASE_URL = process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
 const ARK_MODEL = process.env.ARK_MODEL || "doubao-seedream-4-0-250828";
+const ARK_TEXT_MODEL = process.env.ARK_TEXT_MODEL || "";
 
 const PROMPTS = {
   monet:
@@ -28,7 +29,7 @@ function sendJson(res, status, data) {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   });
   res.end(JSON.stringify(data));
 }
@@ -53,8 +54,240 @@ function logError(message, extra) {
   console.error(`[${now()}] ${message}`);
 }
 
+function maskSecret(secret) {
+  if (!secret) return "(missing)";
+  const value = String(secret);
+  if (value.length <= 8) return `${value.slice(0, 2)}***${value.slice(-1)}`;
+  return `${value.slice(0, 4)}***${value.slice(-4)}`;
+}
+
 function normalizeStyle(style) {
   return ["monet", "watercolor", "vangogh", "ukiyoe", "animebg", "architectural", "botanical", "pastel"].includes(style) ? style : null;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function sanitizeDesignIntentPatch(patch, availableColors = []) {
+  const safe = {};
+  if (patch && typeof patch === "object") {
+    if (patch.height && typeof patch.height === "object") {
+      safe.height = {};
+      for (const key of ["frontMin", "backMin"]) {
+        if (Number.isFinite(patch.height[key])) safe.height[key] = clamp(Number(patch.height[key]), 0, 120);
+      }
+      for (const key of ["frontMax", "backMax"]) {
+        if (Number.isFinite(patch.height[key])) safe.height[key] = clamp(Number(patch.height[key]), 0, 160);
+      }
+      if (Number.isFinite(patch.height.gradientStrength)) {
+        safe.height.gradientStrength = clamp(Number(patch.height.gradientStrength), 0, 1);
+      }
+    }
+    if (patch.density && typeof patch.density === "object") {
+      safe.density = {};
+      for (const key of ["front", "middle", "back"]) {
+        if (Number.isFinite(patch.density[key])) safe.density[key] = clamp(Number(patch.density[key]), 0, 1);
+      }
+    }
+    if (patch.layout && typeof patch.layout === "object") {
+      safe.layout = {};
+      for (const key of ["symmetry", "clusteriness"]) {
+        if (Number.isFinite(patch.layout[key])) safe.layout[key] = clamp(Number(patch.layout[key]), 0, 1);
+      }
+    }
+    if (patch.color?.preferences && typeof patch.color.preferences === "object") {
+      const pref = {};
+      for (const [key, value] of Object.entries(patch.color.preferences)) {
+        if (!availableColors.includes(key)) continue;
+        if (!Number.isFinite(value)) continue;
+        pref[key] = clamp(Number(value), -1, 1);
+      }
+      safe.color = { preferences: pref };
+    }
+  }
+  return safe;
+}
+
+function summarizeDesignIntentDelta(current, patch) {
+  const next = {
+    height: { ...(current?.height || {}), ...(patch?.height || {}) },
+    density: { ...(current?.density || {}), ...(patch?.density || {}) },
+    layout: { ...(current?.layout || {}), ...(patch?.layout || {}) },
+    color: {
+      preferences: {
+        ...(current?.color?.preferences || {}),
+        ...(patch?.color?.preferences || {}),
+      },
+    },
+  };
+
+  return {
+    height: {
+      before: current?.height || {},
+      patch: patch?.height || {},
+      after: next.height,
+    },
+    density: {
+      before: current?.density || {},
+      patch: patch?.density || {},
+      after: next.density,
+    },
+    layout: {
+      before: current?.layout || {},
+      patch: patch?.layout || {},
+      after: next.layout,
+    },
+    colorPreferencesPatch: patch?.color?.preferences || {},
+  };
+}
+
+function extractJsonObject(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) throw new Error("Empty AI response");
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : trimmed;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("AI response did not contain JSON");
+  }
+  return JSON.parse(candidate.slice(start, end + 1));
+}
+
+function heuristicPatchFromMessage(message, availableColors = []) {
+  const patch = {};
+  const summary = [];
+
+  if (/(?:\u5bf9\u79f0|\u6574\u9f50|formal|symmetric)/i.test(message)) {
+    patch.layout = { ...(patch.layout || {}), symmetry: 0.8 };
+    summary.push("Increase symmetry");
+  }
+  if (/(?:\u81ea\u7136|\u968f\u610f|\u677e\u5f1b|natural)/i.test(message)) {
+    patch.layout = { ...(patch.layout || {}), symmetry: 0.2 };
+    summary.push("Reduce symmetry");
+  }
+  if (/(?:\u6210\u7247|\u6210\u56e2|\u56e2\u5757|cluster)/i.test(message)) {
+    patch.layout = { ...(patch.layout || {}), clusteriness: 0.75 };
+    summary.push("Increase clusteriness");
+  }
+  if (/(?:\u540e\u6392.*(?:\u9ad8|\u9ad8\u4e00\u4e9b|\u66f4\u9ad8))/i.test(message)) {
+    patch.height = {
+      ...(patch.height || {}),
+      backMin: 48,
+      backMax: 108,
+      gradientStrength: 0.65,
+    };
+    summary.push("Raise back-row target height");
+  }
+  if (/(?:\u524d\u6392.*(?:\u4f4e|\u4f4e\u4e00\u4e9b|\u66f4\u4f4e))/i.test(message)) {
+    patch.height = {
+      ...(patch.height || {}),
+      frontMin: 8,
+      frontMax: 30,
+      gradientStrength: 0.65,
+    };
+    summary.push("Lower front-row target height");
+  }
+  if (/(?:\u524d\u4f4e\u540e\u9ad8|\u5c42\u6b21)/i.test(message)) {
+    patch.height = { ...(patch.height || {}), frontMin: 10, backMin: 36, gradientStrength: 0.7 };
+    summary.push("Strengthen front-low back-high layering");
+  }
+  if (/(?:\u524d\u6392.*(?:\u758f|\u7a00|\u7a00\u4e00\u70b9|\u66f4\u758f)|\u524d\u9762.*(?:\u758f|\u7a00))/i.test(message)) {
+    patch.density = { ...(patch.density || {}), front: 0.35 };
+    summary.push("Reduce front density");
+  }
+  if (/(?:\u540e\u6392.*(?:\u5bc6|\u5bc6\u4e00\u70b9|\u66f4\u5bc6)|\u540e\u9762.*\u5bc6)/i.test(message)) {
+    patch.density = { ...(patch.density || {}), back: 0.78 };
+    summary.push("Increase back density");
+  }
+
+  const colorMap = {
+    white: /(?:\u767d|white)/i,
+    pink: /(?:\u7c89|pink)/i,
+    purple: /(?:\u7d2b|purple)/i,
+    red: /(?:\u7ea2|red)/i,
+    blue: /(?:\u84dd|blue)/i,
+    yellow: /(?:\u9ec4|yellow)/i,
+    green: /(?:\u7eff|green)/i,
+  };
+  for (const [color, regex] of Object.entries(colorMap)) {
+    if (!availableColors.includes(color) || !regex.test(message)) continue;
+    const negative = /(?:\u5c11|\u51cf\u5c11|\u4e0d\u8981|\u522b|\u53bb\u6389|less|remove|avoid)/i.test(message);
+    const positive = /(?:\u591a|\u589e\u52a0|\u66f4\u591a|\u559c\u6b22|\u504f\u597d|\u60f3\u8981|more|prefer|add)/i.test(message);
+    if (!patch.color) patch.color = { preferences: {} };
+    patch.color.preferences[color] = negative ? -0.6 : positive ? 0.7 : 0.4;
+    summary.push((negative ? "Reduce" : "Increase") + " " + color + " preference");
+  }
+
+  return {
+    patch: sanitizeDesignIntentPatch(patch, availableColors),
+    summary: summary.join(", ") || "Generated a small intent patch from the request.",
+    source: "heuristic",
+  };
+}
+
+async function generateDesignIntentPatchWithArk({ message, designIntent, zone, availableColors }) {
+  const apiKey = process.env.ARK_API_KEY;
+  if (!apiKey || !ARK_TEXT_MODEL) {
+    return heuristicPatchFromMessage(message, availableColors);
+  }
+
+  const systemPrompt = [
+    "You convert a gardening request into a JSON patch.",
+    "Return JSON only. No markdown. No extra explanation.",
+    'Output schema: {"patch":{"height"?:{"frontMin"?:number,"backMin"?:number,"frontMax"?:number,"backMax"?:number,"gradientStrength"?:number},"density"?:{"front"?:number,"middle"?:number,"back"?:number},"layout"?:{"symmetry"?:number,"clusteriness"?:number},"color"?:{"preferences"?:Record<string,number>}},"summary":string}.',
+    "Only include fields that should change.",
+    "Allowed ranges: frontMin/backMin 0-120; frontMax/backMax 0-160; gradientStrength 0-1; density 0-1; symmetry 0-1; clusteriness 0-1; color preference -1 to 1.",
+    "Only use color keys from availableColors.",
+    "Prefer small conservative edits rather than large jumps.",
+    "If the request is vague, return a small helpful patch.",
+  ].join(" ");
+
+  const userPrompt = JSON.stringify({
+    message,
+    zone,
+    availableColors,
+    currentDesignIntent: designIntent,
+  });
+
+  logInfo("Generating design intent patch", {
+    model: ARK_TEXT_MODEL,
+    zone,
+    availableColors,
+    message,
+  });
+
+  const res = await fetch(`${ARK_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: ARK_TEXT_MODEL,
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    logError("Volcengine design-intent request failed", { status: res.status, body: text });
+    throw new Error(`Volcengine text request failed (${res.status}): ${text}`);
+  }
+
+  const json = await res.json();
+  const content = json?.choices?.[0]?.message?.content || "";
+  const parsed = extractJsonObject(content);
+  return {
+    patch: sanitizeDesignIntentPatch(parsed.patch, availableColors),
+    summary: typeof parsed.summary === "string" && parsed.summary.trim() ? parsed.summary.trim() : "Updated the design intent from your request.",
+    source: "ark",
+  };
 }
 
 function splitDataUrl(dataUrl) {
@@ -191,6 +424,39 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/api/design-intent/chat") {
+      const body = await readJsonBody(req);
+      const message = typeof body.message === "string" ? body.message.trim() : "";
+      if (!message) {
+        sendJson(res, 400, { error: "Invalid message" });
+        return;
+      }
+      const designIntent = body.designIntent && typeof body.designIntent === "object" ? body.designIntent : {};
+      const zone = Number.isFinite(body.zone) ? Number(body.zone) : null;
+      const availableColors = Array.isArray(body.availableColors)
+        ? body.availableColors.filter((item) => typeof item === "string")
+        : [];
+      logInfo("Design intent user command", {
+        message,
+        zone,
+        availableColors,
+      });
+      const result = await generateDesignIntentPatchWithArk({
+        message,
+        designIntent,
+        zone,
+        availableColors,
+      });
+      logInfo("Design intent assistant feedback", {
+        source: result.source,
+        summary: result.summary,
+        patch: result.patch,
+      });
+      logInfo("Design intent delta preview", summarizeDesignIntentDelta(designIntent, result.patch));
+      sendJson(res, 200, result);
+      return;
+    }
+
     sendJson(res, 404, { error: "Not found" });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -205,6 +471,9 @@ server.listen(PORT, () => {
   logInfo("Runtime configuration", {
     port: PORT,
     model: ARK_MODEL,
+    textModel: ARK_TEXT_MODEL || "(heuristic fallback)",
     baseUrl: ARK_BASE_URL,
+    apiKeyPresent: !!process.env.ARK_API_KEY,
+    apiKeyPreview: maskSecret(process.env.ARK_API_KEY),
   });
 });

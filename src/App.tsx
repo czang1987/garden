@@ -257,6 +257,8 @@ export default function App() {
   const [exportProgressText, setExportProgressText] = useState("");
   const [exportProgressValue, setExportProgressValue] = useState<number | null>(null);
   const [frontViewExportStyle, setFrontViewExportStyle] = useState<FrontViewExportStyle>("download");
+  const stylizeApiBase = (import.meta.env.VITE_STYLIZE_API_BASE as string | undefined)?.trim() || "http://localhost:8787";
+  const stylizeApiBaseRemote = (import.meta.env.VITE_STYLIZE_API_BASE_REMOTE as string | undefined)?.trim() || "";
 
   const availableColors = useMemo(
     () =>
@@ -852,6 +854,21 @@ export default function App() {
           <button onClick={exportDesignReport} disabled={isExportingReport}>
             {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
           </button>
+        </div>
+        <div
+          style={{
+            border: "1px solid #e2ddd2",
+            borderRadius: 12,
+            padding: "8px 10px",
+            background: "#fffdf8",
+            fontSize: 11,
+            color: "#6e665b",
+            minWidth: 260,
+            lineHeight: 1.5,
+          }}
+        >
+          <div>API: {stylizeApiBase}</div>
+          {stylizeApiBaseRemote ? <div>Remote: {stylizeApiBaseRemote}</div> : null}
         </div>
       </div>
 
