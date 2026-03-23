@@ -296,6 +296,53 @@ function splitDataUrl(dataUrl) {
   return { mimeType: match[1], base64: match[2] };
 }
 
+function readPngDimensions(buffer) {
+  if (buffer.length < 24) return null;
+  const pngSignature = "89504e470d0a1a0a";
+  if (buffer.subarray(0, 8).toString("hex") !== pngSignature) return null;
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20),
+  };
+}
+
+function readJpegDimensions(buffer) {
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
+  let offset = 2;
+  while (offset + 9 < buffer.length) {
+    if (buffer[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    const marker = buffer[offset + 1];
+    const blockLength = buffer.readUInt16BE(offset + 2);
+    const isSof =
+      marker >= 0xc0 &&
+      marker <= 0xcf &&
+      ![0xc4, 0xc8, 0xcc].includes(marker);
+    if (isSof && offset + 8 < buffer.length) {
+      return {
+        height: buffer.readUInt16BE(offset + 5),
+        width: buffer.readUInt16BE(offset + 7),
+      };
+    }
+    if (!blockLength || offset + 2 + blockLength > buffer.length) break;
+    offset += 2 + blockLength;
+  }
+  return null;
+}
+
+function readImageDimensionsFromBase64(mimeType, base64) {
+  try {
+    const buffer = Buffer.from(base64, "base64");
+    if (/png/i.test(mimeType)) return readPngDimensions(buffer);
+    if (/jpe?g/i.test(mimeType)) return readJpegDimensions(buffer);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function readJsonBody(req) {
   const chunks = [];
   for await (const chunk of req) {
@@ -317,11 +364,13 @@ async function generateStylizedImage(imageDataUrl, style) {
 
   const { mimeType, base64 } = splitDataUrl(imageDataUrl);
   const inputDataUrl = `data:${mimeType};base64,${base64}`;
+  const dimensions = readImageDimensionsFromBase64(mimeType, base64);
   logInfo("Generating stylized image", {
     style,
     model: ARK_MODEL,
     mimeType,
     inputBytesApprox: Math.round((base64.length * 3) / 4),
+    dimensions,
   });
 
   const generationRes = await fetch(`${ARK_BASE_URL}/images/generations`, {
@@ -388,7 +437,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       });
       res.end();
       return;
@@ -464,6 +513,10 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 500, { error: message });
   }
 });
+
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
+server.requestTimeout = 10 * 60 * 1000;
 
 server.listen(PORT, () => {
   logInfo(`Stylize server listening on http://localhost:${PORT}`);

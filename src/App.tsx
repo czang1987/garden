@@ -3,7 +3,7 @@ import PlantCatalog from "./components/PlantCatalog";
 import { FrontView, type FrontViewHandle } from "./views/FrontView";
 import { createGarden, resizeGarden } from "./store/garden";
 import type { GardenState, Season } from "./store/garden";
-import { DEFAULT_DESIGN_INTENT, type DesignIntent } from "./type/designIntent";
+import { DEFAULT_DESIGN_INTENT, applyDesignIntentPatch, type DesignIntent } from "./type/designIntent";
 import type { PlantCatalogData, PlantCategory, PlantVariant } from "./type/plants";
 import {
   generateAutoLayout,
@@ -17,6 +17,7 @@ import {
   topSymmetryCandidateCells,
 } from "./utils/layoutEngine";
 import { buildDesignLayoutSvg, buildDesignReportHtml, buildDesignReportPlantRows } from "./utils/designReport";
+import { requestDesignIntentPatch } from "./utils/designIntentChatApi";
 import { buildOccupancyGrid, footprintCells } from "./utils/footprint";
 import { parseLayoutText } from "./utils/layoutIo";
 import { stylizeFrontViewImage, type FrontViewExportStyle } from "./utils/stylizeApi";
@@ -260,6 +261,9 @@ export default function App() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [tutorialTargetRect, setTutorialTargetRect] = useState<DOMRect | null>(null);
+  const [designIntentMessage, setDesignIntentMessage] = useState("");
+  const [designIntentSummary, setDesignIntentSummary] = useState("");
+  const [isApplyingAiIntent, setIsApplyingAiIntent] = useState(false);
   const availableColors = useMemo(
     () =>
       Array.from(
@@ -564,6 +568,27 @@ export default function App() {
     clearAllPlants();
   }
 
+  async function applyAiDesignIntent() {
+    const message = designIntentMessage.trim();
+    if (!message || isApplyingAiIntent) return;
+    setIsApplyingAiIntent(true);
+    try {
+      const result = await requestDesignIntentPatch({
+        message,
+        designIntent,
+        zone: garden.zone,
+        availableColors,
+      });
+      setDesignIntent((prev) => applyDesignIntentPatch(prev, result.patch));
+      setDesignIntentSummary(result.summary || "");
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : String(error);
+      alert(`AI 建议应用失败：${messageText}`);
+    } finally {
+      setIsApplyingAiIntent(false);
+    }
+  }
+
   function downloadDataUrl(dataUrl: string, filename: string) {
     const a = document.createElement("a");
     a.href = dataUrl;
@@ -817,6 +842,7 @@ export default function App() {
   function closeTutorial(remember = true) {
     setShowTutorial(false);
     setTutorialStep(0);
+    setRightPanel("auto");
     if (!remember) return;
     try {
       window.localStorage.setItem("garden-tutorial-dismissed", "1");
@@ -1302,6 +1328,61 @@ export default function App() {
               >
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#2f3d2f", marginBottom: 12 }}>
                   自动生成植物
+                </div>
+                <div
+                  style={{
+                    marginBottom: 14,
+                    padding: 12,
+                    borderRadius: 12,
+                    background: "#f5f8f2",
+                    border: "1px solid #d7e2d1",
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#2f3d2f", marginBottom: 8 }}>AI 设计建议</div>
+                  <textarea
+                    value={designIntentMessage}
+                    onChange={(event) => setDesignIntentMessage(event.target.value)}
+                    placeholder="例如：后排高一些，多一点白花，整体更对称。"
+                    rows={3}
+                    style={{
+                      width: "100%",
+                      resize: "vertical",
+                      borderRadius: 10,
+                      border: "1px solid #d7d7d7",
+                      padding: 10,
+                      fontSize: 13,
+                      fontFamily: "inherit",
+                      boxSizing: "border-box",
+                      marginBottom: 8,
+                    }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                    <div style={{ fontSize: 12, color: "#6e665b", lineHeight: 1.5 }}>
+                      AI 先修改设计参数，你再决定是否自动生成布局。
+                    </div>
+                    <button
+                      onClick={applyAiDesignIntent}
+                      disabled={!designIntentMessage.trim() || isApplyingAiIntent}
+                      style={{ flex: "0 0 auto", padding: "9px 12px", borderRadius: 10, whiteSpace: "nowrap" }}
+                    >
+                      {isApplyingAiIntent ? "应用中..." : "应用 AI 建议"}
+                    </button>
+                  </div>
+                  {designIntentSummary ? (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        fontSize: 12,
+                        color: "#4f5f4f",
+                        background: "#fffdf8",
+                        border: "1px solid #e2ddd2",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                      }}
+                    >
+                      {designIntentSummary}
+                    </div>
+                  ) : null}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                   <button
