@@ -257,9 +257,9 @@ export default function App() {
   const [exportProgressText, setExportProgressText] = useState("");
   const [exportProgressValue, setExportProgressValue] = useState<number | null>(null);
   const [frontViewExportStyle, setFrontViewExportStyle] = useState<FrontViewExportStyle>("download");
-  const stylizeApiBase = (import.meta.env.VITE_STYLIZE_API_BASE as string | undefined)?.trim() || "http://localhost:8787";
-  const stylizeApiBaseRemote = (import.meta.env.VITE_STYLIZE_API_BASE_REMOTE as string | undefined)?.trim() || "";
-
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialTargetRect, setTutorialTargetRect] = useState<DOMRect | null>(null);
   const availableColors = useMemo(
     () =>
       Array.from(
@@ -277,6 +277,10 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const exportToolsRef = useRef<HTMLDivElement | null>(null);
+  const frontEditorRef = useRef<HTMLDivElement | null>(null);
+  const autoPanelRef = useRef<HTMLDivElement | null>(null);
+  const catalogPanelRef = useRef<HTMLDivElement | null>(null);
   const frontPaneRef = useRef<HTMLDivElement | null>(null);
   const frontViewRef = useRef<FrontViewHandle | null>(null);
   const springFrontalReportFrontViewRef = useRef<FrontViewHandle | null>(null);
@@ -555,6 +559,11 @@ export default function App() {
     setSelectedCell(null);
   }
 
+  function confirmClearAllPlants() {
+    if (!window.confirm("确定要清除当前花园里的全部植物吗？")) return;
+    clearAllPlants();
+  }
+
   function downloadDataUrl(dataUrl: string, filename: string) {
     const a = document.createElement("a");
     a.href = dataUrl;
@@ -658,6 +667,7 @@ export default function App() {
       const html = buildDesignReportHtml({
         title: "Garden Design Report",
         garden,
+        variants: allVariants,
         plants,
         layoutSvg,
         seasonalViews,
@@ -752,6 +762,93 @@ export default function App() {
     setGarden((prev) => prunePlantsByZone(prev, allVariants));
   }, [allVariants, garden.zone]);
 
+  useEffect(() => {
+    try {
+      const dismissed = window.localStorage.getItem("garden-tutorial-dismissed");
+      if (!dismissed) {
+        setShowTutorial(true);
+        setTutorialStep(0);
+      }
+    } catch {
+      setShowTutorial(true);
+      setTutorialStep(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showTutorial) return;
+    if (tutorialStep === 1) setRightPanel("auto");
+    if (tutorialStep === 3) setRightPanel("catalog");
+  }, [showTutorial, tutorialStep]);
+
+  useEffect(() => {
+    if (!showTutorial) {
+      setTutorialTargetRect(null);
+      return;
+    }
+
+    const resolveTarget = () => {
+      if (tutorialStep === 0) return exportToolsRef.current;
+      if (tutorialStep === 1) return autoPanelRef.current;
+      if (tutorialStep === 2) return frontEditorRef.current;
+      if (tutorialStep === 3) return catalogPanelRef.current;
+      return null;
+    };
+
+    const updateRect = () => {
+      const target = resolveTarget();
+      if (!target) {
+        setTutorialTargetRect(null);
+        return;
+      }
+      target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      setTutorialTargetRect(target.getBoundingClientRect());
+    };
+
+    updateRect();
+    window.addEventListener("resize", updateRect);
+    window.addEventListener("scroll", updateRect, true);
+    return () => {
+      window.removeEventListener("resize", updateRect);
+      window.removeEventListener("scroll", updateRect, true);
+    };
+  }, [showTutorial, tutorialStep, rightPanel]);
+
+  function closeTutorial(remember = true) {
+    setShowTutorial(false);
+    setTutorialStep(0);
+    if (!remember) return;
+    try {
+      window.localStorage.setItem("garden-tutorial-dismissed", "1");
+    } catch {
+      // ignore storage failures
+    }
+  }
+
+  const tutorialSteps = [
+    {
+      title: "导出与风格区",
+      text:
+        "先选季节，再选导出风格。这里可以导出当前效果图，也可以导出带植物清单、layout 和四季效果图的设计说明。",
+    },
+    {
+      title: "自动生成植物",
+      text:
+        "右侧默认打开这个面板。先点 `自动生成布局`，然后再调高度、梯度、对称性、成片感、颜色偏好和前中后排密度。",
+    },
+    {
+      title: "Front View 编辑区",
+      text:
+        "左侧是主要编辑画面。点击画面进入编辑模式，之后可以选中具体位置，再切到 `选植物` 面板做手动摆放。选中已有植物后，按 `Delete` 或 `Backspace` 可以直接删除。",
+    },
+    {
+      title: "选植物面板",
+      text:
+        "这里适合做细调。自动生成后，如果你想换掉某几株、补几株，或者按自己的想法手动摆放，就在这个面板完成。",
+    },
+  ] as const;
+  const activeTutorial = tutorialSteps[tutorialStep] ?? tutorialSteps[0];
+
   return (
     <div style={{ padding: 16, maxWidth: 1800, margin: "0 auto" }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
@@ -799,17 +896,16 @@ export default function App() {
             />
           </label>
           <button onClick={applySize}>应用</button>
-          <button onClick={clearAllPlants}>清空全部植物</button>
-          <button onClick={triggerImport}>导入布局文件</button>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".txt,text/plain"
+            accept=".txt,.html,.htm,text/plain,text/html"
             onChange={onImportFile}
             style={{ display: "none" }}
           />
         </div>
         <div
+          ref={exportToolsRef}
           style={{
             display: "inline-flex",
             gap: 8,
@@ -854,21 +950,7 @@ export default function App() {
           <button onClick={exportDesignReport} disabled={isExportingReport}>
             {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
           </button>
-        </div>
-        <div
-          style={{
-            border: "1px solid #e2ddd2",
-            borderRadius: 12,
-            padding: "8px 10px",
-            background: "#fffdf8",
-            fontSize: 11,
-            color: "#6e665b",
-            minWidth: 260,
-            lineHeight: 1.5,
-          }}
-        >
-          <div>API: {stylizeApiBase}</div>
-          {stylizeApiBaseRemote ? <div>Remote: {stylizeApiBaseRemote}</div> : null}
+          <button onClick={triggerImport}>导入布局</button>
         </div>
       </div>
 
@@ -883,9 +965,6 @@ export default function App() {
           onChange={(e) => setRowGapRatio(Number(e.target.value))}
           style={{ width: 260 }}
         />
-        <span style={{ fontSize: 12, color: "#666" }}>
-          COL_GAP: {colGap} / ROW_GAP: {rowGap}
-        </span>
       </div>
 
       {selectedCell ? (
@@ -1013,6 +1092,69 @@ export default function App() {
         </div>
       ) : null}
 
+      {showTutorial && tutorialTargetRect ? (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, pointerEvents: "none" }}>
+          <div
+            style={{
+              position: "fixed",
+              left: tutorialTargetRect.left - 8,
+              top: tutorialTargetRect.top - 8,
+              width: tutorialTargetRect.width + 16,
+              height: tutorialTargetRect.height + 16,
+              borderRadius: 18,
+              border: "2px solid #ffffff",
+              boxShadow: "0 0 0 9999px rgba(21, 18, 12, 0.42), 0 0 0 1px rgba(47,61,47,0.4), 0 18px 48px rgba(0,0,0,0.18)",
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: Math.min(window.innerHeight - 230, tutorialTargetRect.bottom + 16),
+              left: Math.min(window.innerWidth - 356, Math.max(16, tutorialTargetRect.left)),
+              width: 340,
+              background: "#fffdf8",
+              border: "1px solid #e2ddd2",
+              borderRadius: 18,
+              boxShadow: "0 18px 60px rgba(20, 16, 10, 0.22)",
+              padding: 18,
+              pointerEvents: "auto",
+            }}
+          >
+            <div style={{ fontSize: 12, color: "#8b7e6e", marginBottom: 6 }}>
+              新用户教程 {tutorialStep + 1} / {tutorialSteps.length}
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#2f3d2f", marginBottom: 8 }}>{activeTutorial.title}</div>
+            <div style={{ fontSize: 13, color: "#5c665a", lineHeight: 1.7 }}>{activeTutorial.text}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 16 }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => setTutorialStep((prev) => Math.max(0, prev - 1))}
+                  disabled={tutorialStep === 0}
+                  style={{ padding: "9px 12px", borderRadius: 10, background: "#fff", border: "1px solid #d9d9d9" }}
+                >
+                  上一步
+                </button>
+                <button
+                  onClick={() => closeTutorial(false)}
+                  style={{ padding: "9px 12px", borderRadius: 10, background: "#fff", border: "1px solid #d9d9d9" }}
+                >
+                  先关闭
+                </button>
+              </div>
+              {tutorialStep < tutorialSteps.length - 1 ? (
+                <button onClick={() => setTutorialStep((prev) => Math.min(tutorialSteps.length - 1, prev + 1))} style={{ padding: "9px 14px", borderRadius: 10 }}>
+                  下一步
+                </button>
+              ) : (
+                <button onClick={() => closeTutorial(true)} style={{ padding: "9px 14px", borderRadius: 10 }}>
+                  我知道了
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div
         ref={editorRef}
         style={{
@@ -1022,14 +1164,15 @@ export default function App() {
         }}
       >
         <div
-          ref={frontPaneRef}
+          ref={frontEditorRef}
           style={{
             flex: "1 1 auto",
             minWidth: 0,
           }}
         >
+          <div ref={frontPaneRef}>
           <div style={{ marginBottom: 8, fontSize: 13, color: "#666" }}>
-            点击左侧 front view 进入编辑，点击外部退出编辑。
+            点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，按 Delete 或 Backspace 可以删除。
           </div>
           <FrontView
             ref={frontViewRef}
@@ -1050,6 +1193,7 @@ export default function App() {
               setSelectedCell(null);
             }}
           />
+          </div>
         </div>
 
         <div
@@ -1088,9 +1232,29 @@ export default function App() {
               >
                 自动生成植物
               </button>
+              <button
+                onClick={() => setShowTutorial(true)}
+                title="打开新用户教程"
+                aria-label="打开新用户教程"
+                style={{
+                  flex: "0 0 auto",
+                  width: 34,
+                  height: 34,
+                  padding: 0,
+                  borderRadius: 999,
+                  border: "1px solid #d9d9d9",
+                  background: "#fff",
+                  color: "#6e665b",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                }}
+              >
+                ?
+              </button>
             </div>
             {rightPanel === "catalog" ? (
-              <>
+              <div ref={catalogPanelRef}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
                   {selectedCell ? `选中位置: (${selectedCell.r}, ${selectedCell.c})` : "请选择一个格子"}
                 </div>
@@ -1121,9 +1285,10 @@ export default function App() {
                     正在加载植物目录。
                   </div>
                 )}
-              </>
+              </div>
             ) : (
               <div
+                ref={autoPanelRef}
                 style={{
                   width: "100%",
                   border: "1px solid #e2ddd2",
@@ -1138,17 +1303,33 @@ export default function App() {
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#2f3d2f", marginBottom: 12 }}>
                   自动生成植物
                 </div>
-                <button
-                  onClick={autoGenerate}
-                  disabled={allVariants.length === 0 || isGeneratingLayout}
-                  style={{ width: "100%", padding: "10px 12px", marginBottom: 14, borderRadius: 10 }}
-                >
-                  {isCatalogLoading
-                    ? "正在加载植物库..."
-                    : isGeneratingLayout
-                      ? "正在生成布局..."
-                      : "自动生成布局"}
-                </button>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                  <button
+                    onClick={autoGenerate}
+                    disabled={allVariants.length === 0 || isGeneratingLayout}
+                    style={{ flex: "1 1 auto", padding: "10px 12px", borderRadius: 10 }}
+                  >
+                    {isCatalogLoading
+                      ? "正在加载植物库..."
+                      : isGeneratingLayout
+                        ? "正在生成布局..."
+                        : "自动生成布局"}
+                  </button>
+                  <button
+                    onClick={confirmClearAllPlants}
+                    style={{
+                      flex: "0 0 auto",
+                      padding: "10px 10px",
+                      borderRadius: 10,
+                      background: "#6a5a49",
+                      border: "1px solid #5b4d3f",
+                      color: "#fffdf8",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    清空
+                  </button>
+                </div>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
                     Min Height: {designIntent.height.frontMin} - {designIntent.height.backMin}

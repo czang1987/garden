@@ -1,6 +1,7 @@
 import type { GardenState, Season } from "../store/garden";
 import type { PlantVariant } from "../type/plants";
 import { footprintBounds } from "./footprint";
+import { buildLayoutFile } from "./layoutIo";
 
 type DesignReportPlantRow = {
   plantId: string;
@@ -127,6 +128,7 @@ export function buildDesignLayoutSvg(garden: GardenState, variants: PlantVariant
 export function buildDesignReportHtml(params: {
   title: string;
   garden: GardenState;
+  variants: PlantVariant[];
   plants: DesignReportPlantRow[];
   layoutSvg: string;
   seasonalViews: Array<{
@@ -134,7 +136,8 @@ export function buildDesignReportHtml(params: {
     frontalPng: string;
   }>;
 }) {
-  const { title, garden, plants, layoutSvg, seasonalViews } = params;
+  const { title, garden, variants, plants, layoutSvg, seasonalViews } = params;
+  const layoutFileJson = JSON.stringify(buildLayoutFile(garden, variants)).replaceAll("<", "\\u003c");
   const plantRows = plants
     .map(
       (plant) => `
@@ -228,6 +231,7 @@ export function buildDesignReportHtml(params: {
       </div>
       <div class="caption">Each row shows one season in the frontal viewing angle.</div>
     </section>
+    <script id="garden-layout-data" type="application/json">${layoutFileJson}</script>
   </body>
 </html>`;
 }

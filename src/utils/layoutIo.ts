@@ -179,7 +179,14 @@ export function parseLayoutText(
   try {
     raw = JSON.parse(text);
   } catch {
-    raw = parseReadableTextToLayoutFile(text);
+    const embeddedJsonMatch = text.match(
+      /<script[^>]*id=["']garden-layout-data["'][^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/i
+    );
+    if (embeddedJsonMatch?.[1]) {
+      raw = JSON.parse(embeddedJsonMatch[1].trim());
+    } else {
+      raw = parseReadableTextToLayoutFile(text);
+    }
   }
   const placementsRaw = Array.isArray(raw?.placements) ? raw.placements : Array.isArray(raw) ? raw : [];
   const rowsFromFile = toInt(raw?.rows, 0);
