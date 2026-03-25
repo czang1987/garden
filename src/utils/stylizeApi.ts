@@ -1,6 +1,7 @@
 export type FrontViewExportStyle =
   | "download"
   | "monet"
+  | "impressionist"
   | "watercolor"
   | "vangogh"
   | "ukiyoe"

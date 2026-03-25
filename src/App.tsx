@@ -963,6 +963,7 @@ export default function App() {
             >
               <option value="download">原图</option>
               <option value="monet">莫奈</option>
+              <option value="impressionist">印象派</option>
               <option value="watercolor">水彩</option>
               <option value="vangogh">梵高</option>
               <option value="ukiyoe">浮世绘</option>
