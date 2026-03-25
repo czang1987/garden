@@ -324,29 +324,6 @@ function drawSkyBackdrop(
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const sunX = canvas.width * 0.78;
-  const sunY = Math.max(44, canvas.height * 0.22);
-  const sunGlowRadius = Math.max(72, canvas.width * 0.08);
-  const sunCoreRadius = Math.max(24, sunGlowRadius * 0.34);
-
-  const sunGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunGlowRadius);
-  sunGlow.addColorStop(0, "rgba(255,242,190,0.75)");
-  sunGlow.addColorStop(0.45, "rgba(255,232,168,0.38)");
-  sunGlow.addColorStop(1, "rgba(255,232,168,0)");
-  ctx.fillStyle = sunGlow;
-  ctx.beginPath();
-  ctx.arc(sunX, sunY, sunGlowRadius, 0, Math.PI * 2);
-  ctx.fill();
-
-  const sunCore = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunCoreRadius);
-  sunCore.addColorStop(0, "rgba(255,251,233,0.98)");
-  sunCore.addColorStop(0.65, "rgba(255,233,170,0.92)");
-  sunCore.addColorStop(1, "rgba(255,215,138,0.82)");
-  ctx.fillStyle = sunCore;
-  ctx.beginPath();
-  ctx.arc(sunX, sunY, sunCoreRadius, 0, Math.PI * 2);
-  ctx.fill();
-
   const haze = ctx.createLinearGradient(0, canvas.height * 0.55, 0, canvas.height);
   haze.addColorStop(0, "rgba(255,255,255,0)");
   haze.addColorStop(1, "rgba(255,248,235,0.8)");
