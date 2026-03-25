@@ -22,7 +22,7 @@ export async function stylizeFrontViewImage(
   imageDataUrl: string,
   style: Exclude<FrontViewExportStyle, "download">
 ): Promise<{ imageDataUrl: string }> {
-  const apiBase = (import.meta.env.VITE_STYLIZE_API_BASE as string | undefined)?.trim() || "http://localhost:8787";
+  const apiBase = ((import.meta.env.VITE_STYLIZE_API_BASE as string | undefined)?.trim() || "").replace(/\/+$/, "");
   const apiBaseRemote = (import.meta.env.VITE_STYLIZE_API_BASE_REMOTE as string | undefined)?.trim() || "";
   let dimensions: { width: number; height: number } | null = null;
   try {

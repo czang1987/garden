@@ -238,6 +238,8 @@ function ColorDotSelect({
 }
 
 export default function App() {
+  const apiBase = ((import.meta.env.VITE_STYLIZE_API_BASE as string | undefined)?.trim() || "").replace(/\/+$/, "");
+  const apiBaseRemote = ((import.meta.env.VITE_STYLIZE_API_BASE_REMOTE as string | undefined)?.trim() || "").replace(/\/+$/, "");
   const [garden, setGarden] = useState<GardenState>(createGarden(20, 20));
   const [rowGapRatio, setRowGapRatio] = useState(0.28);
   const [rowsInput, setRowsInput] = useState(garden.rows);
@@ -978,6 +980,22 @@ export default function App() {
           </button>
           <button onClick={triggerImport}>导入布局</button>
         </div>
+      </div>
+
+      <div
+        style={{
+          marginBottom: 12,
+          padding: "8px 10px",
+          borderRadius: 10,
+          background: "#f7f4ed",
+          border: "1px solid #e2ddd2",
+          color: "#6e665b",
+          fontSize: 12,
+          lineHeight: 1.6,
+        }}
+      >
+        <div>API: {apiBase || "(same-origin /api)"}</div>
+        <div>Remote: {apiBaseRemote || "(not set)"}</div>
       </div>
 
       <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
