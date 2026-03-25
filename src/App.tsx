@@ -257,6 +257,10 @@ export default function App() {
   const [isGeneratingLayout, setIsGeneratingLayout] = useState(false);
   const [isExportingReport, setIsExportingReport] = useState(false);
   const [isStylizingFrontView, setIsStylizingFrontView] = useState(false);
+  const [frontViewMode, setFrontViewMode] = useState<"edit" | "preview">("edit");
+  const [isGeneratingFrontViewPreview, setIsGeneratingFrontViewPreview] = useState(false);
+  const [frontViewPreviewImage, setFrontViewPreviewImage] = useState("");
+  const [frontViewPreviewError, setFrontViewPreviewError] = useState("");
   const [exportProgressText, setExportProgressText] = useState("");
   const [exportProgressValue, setExportProgressValue] = useState<number | null>(null);
   const [frontViewExportStyle, setFrontViewExportStyle] = useState<FrontViewExportStyle>("download");
@@ -634,6 +638,35 @@ export default function App() {
     }
   }
 
+  async function showFrontViewPreview() {
+    const url = frontViewRef.current?.exportPng();
+    if (!url) {
+      alert("当前 FrontView 还没有可预览的画布。");
+      return;
+    }
+
+    setFrontViewMode("preview");
+    setFrontViewPreviewError("");
+
+    if (frontViewExportStyle === "download") {
+      setFrontViewPreviewImage(url);
+      return;
+    }
+
+    if (isGeneratingFrontViewPreview) return;
+    setIsGeneratingFrontViewPreview(true);
+    setFrontViewPreviewImage("");
+    try {
+      const result = await stylizeFrontViewImage(url, frontViewExportStyle);
+      setFrontViewPreviewImage(result.imageDataUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setFrontViewPreviewError(message);
+    } finally {
+      setIsGeneratingFrontViewPreview(false);
+    }
+  }
+
   async function exportDesignReport() {
     if (isExportingReport) return;
     setIsExportingReport(true);
@@ -809,6 +842,11 @@ export default function App() {
   }, [showTutorial, tutorialStep]);
 
   useEffect(() => {
+    setFrontViewPreviewImage("");
+    setFrontViewPreviewError("");
+  }, [garden, rowGap, colGap, canvasWidth, frontViewExportStyle]);
+
+  useEffect(() => {
     if (!showTutorial) {
       setTutorialTargetRect(null);
       return;
@@ -979,7 +1017,6 @@ export default function App() {
           <button onClick={exportDesignReport} disabled={isExportingReport}>
             {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
           </button>
-          <button onClick={triggerImport}>导入布局</button>
         </div>
       </div>
 
@@ -1216,28 +1253,131 @@ export default function App() {
           }}
         >
           <div ref={frontPaneRef}>
-          <div style={{ marginBottom: 8, fontSize: 13, color: "#666" }}>
-            点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，按 Delete 或 Backspace 可以删除。
-          </div>
-          <FrontView
-            ref={frontViewRef}
-            garden={garden}
-            colGap={colGap}
-            rowGap={rowGap}
-            monetMode={false}
-            canvasWidth={canvasWidth}
-            showEditGrid={editMode}
-            selectedCell={selectedCell}
-            symmetryHints={symmetryHints}
-            onCellSelect={(cell) => {
-              setEditMode(true);
-              setSelectedCell(cell);
-            }}
-            onCanvasBackgroundClick={() => {
-              setEditMode(false);
-              setSelectedCell(null);
-            }}
-          />
+            <div
+              style={{
+                marginBottom: 8,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ fontSize: 13, color: "#666" }}>
+                {frontViewMode === "edit"
+                  ? "点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，按 Delete 或 Backspace 可以删除。"
+                  : "效果预览是静态图，不可编辑；切回编辑模式后可继续摆放和删除植物。"}
+              </div>
+              <div
+                style={{
+                  display: "inline-flex",
+                  gap: 6,
+                  padding: 4,
+                  borderRadius: 999,
+                  background: "#f3efe7",
+                  border: "1px solid #e0d8cb",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setFrontViewMode("edit")}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: frontViewMode === "edit" ? "1px solid #6e8f72" : "1px solid transparent",
+                    background: frontViewMode === "edit" ? "#eef6ee" : "transparent",
+                    color: "#2f3d2f",
+                  }}
+                >
+                  编辑模式
+                </button>
+                <button
+                  type="button"
+                  onClick={showFrontViewPreview}
+                  disabled={isGeneratingFrontViewPreview}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: frontViewMode === "preview" ? "1px solid #6e8f72" : "1px solid transparent",
+                    background: frontViewMode === "preview" ? "#eef6ee" : "transparent",
+                    color: "#2f3d2f",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {isGeneratingFrontViewPreview ? "生成预览中..." : "效果预览"}
+                </button>
+              </div>
+            </div>
+            <div style={{ display: frontViewMode === "edit" ? "block" : "none" }}>
+              <FrontView
+                ref={frontViewRef}
+                garden={garden}
+                colGap={colGap}
+                rowGap={rowGap}
+                monetMode={false}
+                canvasWidth={canvasWidth}
+                showEditGrid={editMode}
+                selectedCell={selectedCell}
+                symmetryHints={symmetryHints}
+                onCellSelect={(cell) => {
+                  setEditMode(true);
+                  setSelectedCell(cell);
+                }}
+                onCanvasBackgroundClick={() => {
+                  setEditMode(false);
+                  setSelectedCell(null);
+                }}
+              />
+            </div>
+            {frontViewMode === "preview" ? (
+              <div
+                style={{
+                  width: canvasWidth,
+                  minHeight: 420,
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  border: "1px solid #ddd5c8",
+                  background: "#f8f4ec",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative",
+                }}
+              >
+                {frontViewPreviewImage ? (
+                  <img
+                    src={frontViewPreviewImage}
+                    alt="front view stylized preview"
+                    style={{ display: "block", width: "100%", height: "auto" }}
+                  />
+                ) : (
+                  <div style={{ padding: 24, textAlign: "center", color: "#6e665b", fontSize: 13 }}>
+                    {frontViewPreviewError
+                      ? `效果预览生成失败：${frontViewPreviewError}`
+                      : isGeneratingFrontViewPreview
+                        ? "正在生成当前效果图预览..."
+                        : "点击“效果预览”生成当前 FrontView 的静态效果图。"}
+                  </div>
+                )}
+                {frontViewPreviewImage && !isGeneratingFrontViewPreview ? (
+                  <button
+                    type="button"
+                    onClick={showFrontViewPreview}
+                    style={{
+                      position: "absolute",
+                      top: 12,
+                      right: 12,
+                      padding: "7px 10px",
+                      borderRadius: 999,
+                      background: "rgba(255,255,255,0.92)",
+                      border: "1px solid #d9d9d9",
+                    }}
+                  >
+                    刷新预览
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -1345,8 +1485,34 @@ export default function App() {
                   lineHeight: 1.7,
                 }}
               >
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#2f3d2f", marginBottom: 12 }}>
-                  自动生成植物
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#2f3d2f" }}>
+                    自动生成植物
+                  </div>
+                  <button
+                    type="button"
+                    onClick={triggerImport}
+                    style={{
+                      flex: "0 0 auto",
+                      padding: "6px 10px",
+                      borderRadius: 999,
+                      border: "1px solid #d7d7d7",
+                      background: "#f6f3ed",
+                      color: "#6e665b",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    导入布局
+                  </button>
                 </div>
                 <div
                   style={{
