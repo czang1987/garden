@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import type { PlantCategory, PlantVariant } from "../type/plants";
 
 export default function PlantCatalog({
@@ -63,7 +63,7 @@ export default function PlantCatalog({
     <div style={{ width: "100%", maxWidth: layout.panelMaxWidth }}>
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input
-          placeholder="搜索：rose / white / full sun ..."
+          placeholder="搜索: rose / white / full sun ..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
           style={{ flex: 1, padding: "6px 8px" }}
@@ -215,8 +215,11 @@ export default function PlantCatalog({
             <div style={{ color: "#777" }}>占格</div>
             <div>{(hovered.v.footprint ?? [1, 1]).join("x")}</div>
 
+            <div style={{ color: "#777" }}>颜色</div>
+            <div>{hovered.v.color ?? "-"}</div>
+
             <div style={{ color: "#777" }}>高度</div>
-            <div>{hovered.v.baseHeight} cm</div>
+            <div>{formatHeightFeet(hovered.v.baseHeight)}</div>
 
             <div style={{ color: "#777" }}>Zone</div>
             <div>{hovered.v.zone ?? "-"}</div>
@@ -224,14 +227,8 @@ export default function PlantCatalog({
             <div style={{ color: "#777" }}>日照</div>
             <div>{formatSun(hovered.v.sun)}</div>
 
-            <div style={{ color: "#777" }}>浇水</div>
-            <div>{formatWater(hovered.v.water)}</div>
-
             <div style={{ color: "#777" }}>花期</div>
             <div>{formatSeasons(hovered.v.bloomSeasons)}</div>
-
-            <div style={{ color: "#777" }}>维护</div>
-            <div>{hovered.v.maintenance ?? "-"} / 5</div>
           </div>
 
           {hovered.v.tags?.length ? (
@@ -276,13 +273,6 @@ function formatSun(s?: string) {
   return "-";
 }
 
-function formatWater(w?: string) {
-  if (w === "low") return "低";
-  if (w === "medium") return "中";
-  if (w === "high") return "高";
-  return "-";
-}
-
 function formatSeasons(ss?: string[]) {
   if (!ss || ss.length === 0) return "-";
   const map: Record<string, string> = {
@@ -292,4 +282,10 @@ function formatSeasons(ss?: string[]) {
     winter: "冬",
   };
   return ss.map((s) => map[s] ?? s).join(" / ");
+}
+
+function formatHeightFeet(cm?: number) {
+  if (!cm || cm <= 0) return "-";
+  const feet = cm / 30.48;
+  return `${feet.toFixed(1)} ft`;
 }
