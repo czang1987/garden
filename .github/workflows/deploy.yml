@@ -1,0 +1,36 @@
+name: Deploy Garden
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-garden-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy on server over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script_stop: true
+          script: |
+            set -e
+            cd ~/garden
+            git pull origin main
+            npm ci
+            npm run build
+            mkdir -p /var/www/garden-app/dist
+            rsync -a --delete dist/ /var/www/garden-app/dist/
+            set -a
+            source .env.stylize
+            set +a
+            pm2 restart garden-stylize --update-env
