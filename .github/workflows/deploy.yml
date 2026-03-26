@@ -24,13 +24,22 @@ jobs:
           script_stop: true
           script: |
             set -e
+            echo "[deploy] starting on $(hostname)"
+            echo "[deploy] entering repo"
             cd ~/garden
+            echo "[deploy] pulling latest code"
             git pull origin main
+            echo "[deploy] installing dependencies"
             npm ci
+            echo "[deploy] building frontend"
             npm run build
+            echo "[deploy] syncing dist to /var/www/garden-app/dist"
             mkdir -p /var/www/garden-app/dist
             rsync -a --delete dist/ /var/www/garden-app/dist/
+            echo "[deploy] loading runtime environment"
             set -a
             source .env.stylize
             set +a
+            echo "[deploy] restarting pm2 service"
             pm2 restart garden-stylize --update-env
+            echo "[deploy] deployment finished successfully"
