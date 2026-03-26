@@ -36,9 +36,13 @@ jobs:
             echo "[deploy] syncing dist to /var/www/garden-app/dist"
             mkdir -p /var/www/garden-app/dist
             rsync -a --delete dist/ /var/www/garden-app/dist/
+            echo "[deploy] syncing backend files to /home/ubuntu/garden-stylize"
+            mkdir -p /home/ubuntu/garden-stylize/server
+            rsync -a server/ /home/ubuntu/garden-stylize/server/
+            rsync -a package.json package-lock.json /home/ubuntu/garden-stylize/
             echo "[deploy] loading runtime environment"
             set -a
-            source .env.stylize
+            source /home/ubuntu/garden-stylize/.env.stylize
             set +a
             echo "[deploy] restarting pm2 service"
             pm2 restart garden-stylize --update-env
