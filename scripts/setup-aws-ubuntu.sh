@@ -2,7 +2,6 @@
 set -euo pipefail
 
 # Usage example:
-#   REPO_SSH_URL="git@github.com:czang1987/garden.git" \
 #   DOMAIN="" \
 #   APP_USER="ubuntu" \
 #   bash scripts/setup-aws-ubuntu.sh
@@ -13,7 +12,7 @@ set -euo pipefail
 #     ~/garden
 #     /home/ubuntu/garden-stylize
 #     /var/www/garden-app/dist
-# - clones or updates the repo
+# - uses an existing repo checkout
 # - builds the frontend once
 # - syncs the frontend dist and backend server files
 # - writes an nginx config for same-origin frontend + /api/ proxy
@@ -30,15 +29,9 @@ APP_HOME="/home/${APP_USER}"
 APP_REPO_DIR="${APP_REPO_DIR:-${APP_HOME}/garden}"
 RUNTIME_DIR="${RUNTIME_DIR:-${APP_HOME}/garden-stylize}"
 STATIC_DIR="${STATIC_DIR:-/var/www/garden-app/dist}"
-REPO_SSH_URL="${REPO_SSH_URL:-}"
 DOMAIN="${DOMAIN:-}"
 API_PORT="${API_PORT:-8787}"
 SETUP_CERTBOT="${SETUP_CERTBOT:-1}"
-
-if [[ -z "${REPO_SSH_URL}" ]]; then
-  echo "[setup] REPO_SSH_URL is required, for example: git@github.com:czang1987/garden.git"
-  exit 1
-fi
 
 echo "[setup] updating apt packages"
 sudo apt-get update
@@ -74,11 +67,9 @@ sudo find "/var/www/garden-app" -type f -exec chmod 664 {} \; || true
 mkdir -p "${RUNTIME_DIR}/server"
 
 if [[ ! -d "${APP_REPO_DIR}/.git" ]]; then
-  echo "[setup] cloning repo into ${APP_REPO_DIR}"
-  git clone "${REPO_SSH_URL}" "${APP_REPO_DIR}"
-else
-  echo "[setup] repo already exists, fetching latest refs"
-  git -C "${APP_REPO_DIR}" fetch origin
+  echo "[setup] repo not found at ${APP_REPO_DIR}"
+  echo "[setup] clone or copy the project there first, then rerun this script"
+  exit 1
 fi
 
 echo "[setup] installing repo dependencies"
