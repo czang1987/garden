@@ -1,0 +1,49 @@
+name: Deploy Garden AWS
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-garden-aws-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy on AWS over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AWS_SERVER_HOST }}
+          username: ${{ secrets.AWS_SERVER_USER }}
+          key: ${{ secrets.AWS_SERVER_SSH_KEY }}
+          port: ${{ secrets.AWS_SERVER_PORT }}
+          script_stop: true
+          script: |
+            set -e
+            echo "[aws-deploy] starting on $(hostname)"
+            echo "[aws-deploy] entering repo"
+            cd ~/garden
+            echo "[aws-deploy] pulling latest code"
+            git pull origin main
+            echo "[aws-deploy] installing dependencies"
+            npm ci
+            echo "[aws-deploy] building frontend"
+            npm run build
+            echo "[aws-deploy] syncing dist to /var/www/garden-app/dist"
+            mkdir -p /var/www/garden-app/dist
+            rsync -a --delete dist/ /var/www/garden-app/dist/
+            echo "[aws-deploy] syncing backend files to /home/ubuntu/garden-stylize"
+            mkdir -p /home/ubuntu/garden-stylize/server
+            rsync -a server/ /home/ubuntu/garden-stylize/server/
+            rsync -a package.json package-lock.json /home/ubuntu/garden-stylize/
+            echo "[aws-deploy] loading runtime environment"
+            set -a
+            source /home/ubuntu/garden-stylize/.env.stylize
+            set +a
+            echo "[aws-deploy] restarting pm2 service"
+            pm2 restart garden-stylize --update-env
+            echo "[aws-deploy] deployment finished successfully"
