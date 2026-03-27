@@ -103,7 +103,11 @@ function footprintCenterBottom(
 }
 
 async function loadPlantTexture(plantId: string, season: string) {
-  return await PIXI.Assets.load(`/assets/plants/${plantId}/${season}.png`);
+  const startedAt = performance.now();
+  const texture = await PIXI.Assets.load(`/assets/plants/${plantId}/${season}.png`);
+  const elapsedMs = Math.round(performance.now() - startedAt);
+  console.log(`[frontview] loaded plant texture ${plantId}/${season} in ${elapsedMs}ms`);
+  return texture;
 }
 
 async function loadPlantTexturesForSeason(

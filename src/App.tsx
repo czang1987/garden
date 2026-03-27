@@ -541,14 +541,15 @@ export default function App() {
     setExportProgressValue(15);
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     try {
-      setExportProgressText("正在根据当前约束生成布局...");
-      setExportProgressValue(60);
-      setGarden((prev) =>
-        generateAutoLayout(prev, allVariants, {
+      setExportProgressText("正在分析当前约束并计算布局...");
+      setExportProgressValue(45);
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+      setGarden((prev) => {
+        return generateAutoLayout(prev, allVariants, {
           targetCoverage: 0.62,
           designIntent,
-        })
-      );
+        });
+      });
       setExportProgressText("布局已生成，正在刷新视图...");
       setExportProgressValue(95);
       setEditMode(false);
