@@ -240,6 +240,9 @@ function ColorDotSelect({
 export default function App() {
   const apiBase = ((import.meta.env.VITE_STYLIZE_API_BASE as string | undefined)?.trim() || "").replace(/\/+$/, "");
   const apiBaseRemote = ((import.meta.env.VITE_STYLIZE_API_BASE_REMOTE as string | undefined)?.trim() || "").replace(/\/+$/, "");
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window === "undefined" ? 1280 : window.innerWidth
+  );
   const [garden, setGarden] = useState<GardenState>(createGarden(20, 20));
   const [rowGapRatio, setRowGapRatio] = useState(0.28);
   const [rowsInput, setRowsInput] = useState(garden.rows);
@@ -261,6 +264,7 @@ export default function App() {
   const [isGeneratingFrontViewPreview, setIsGeneratingFrontViewPreview] = useState(false);
   const [frontViewPreviewImage, setFrontViewPreviewImage] = useState("");
   const [frontViewPreviewError, setFrontViewPreviewError] = useState("");
+  const [frontViewTextureLoadProgress, setFrontViewTextureLoadProgress] = useState<{ loaded: number; total: number } | null>(null);
   const [exportProgressText, setExportProgressText] = useState("");
   const [exportProgressValue, setExportProgressValue] = useState<number | null>(null);
   const [frontViewExportStyle, setFrontViewExportStyle] = useState<FrontViewExportStyle>("download");
@@ -304,6 +308,12 @@ export default function App() {
     fetch("/assets/plants/index.json")
       .then((r) => r.json())
       .then((data: PlantCatalogData) => setCategories(data.categories ?? []));
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
@@ -368,6 +378,7 @@ export default function App() {
 
   const occupancy = useMemo(() => buildOccupancyGrid(garden, allVariants), [garden, allVariants]);
   const layoutScore = useMemo(() => scoreLayout(garden, allVariants), [garden, allVariants]);
+  const selectedPlantAnchor = useMemo(() => resolveSelectedPlantAnchor(garden), [allVariants, garden, selectedCell]);
   const densityStats = useMemo(() => {
     const counts = {
       front: { used: 0, total: 0 },
@@ -394,6 +405,8 @@ export default function App() {
   );
 
   const canvasWidth = Math.max(520, frontPaneWidth - 4);
+  const isCompactLayout = viewportWidth < 1100;
+  const isPhoneLayout = viewportWidth < 720;
   const frameThickness = 36;
   const horizontalPadding = frameThickness * 2 + 48;
   const availableGridWidth = Math.max(160, canvasWidth - horizontalPadding);
@@ -1024,24 +1037,27 @@ export default function App() {
         </div>
       </div>
 
-      <div
-        style={{
-          marginBottom: 12,
-          padding: "8px 10px",
-          borderRadius: 10,
-          background: "#f7f4ed",
-          border: "1px solid #e2ddd2",
-          color: "#6e665b",
-          fontSize: 12,
-          lineHeight: 1.6,
-        }}
-      >
-        <div>API: {apiBase || "(same-origin /api)"}</div>
-        <div>Remote: {apiBaseRemote || "(not set)"}</div>
-      </div>
-
       <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 13, color: "#444", marginLeft: 8 }}>View Angle</span>
+        <button
+          type="button"
+          onClick={() => choosePlant(null)}
+          disabled={!selectedPlantAnchor}
+          style={{
+            flex: "0 0 auto",
+            padding: "7px 11px",
+            borderRadius: 999,
+            border: "1px solid #cdbdb3",
+            background: selectedPlantAnchor ? "#fff7f3" : "#f2ede7",
+            color: selectedPlantAnchor ? "#7f4a36" : "#9b9185",
+            fontSize: 12,
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+            cursor: selectedPlantAnchor ? "pointer" : "not-allowed",
+          }}
+        >
+          删除植物
+        </button>
+        <span style={{ fontSize: 13, color: "#444", marginLeft: 8 }}>调整视角</span>
         <input
           type="range"
           min={0.15}
@@ -1052,40 +1068,6 @@ export default function App() {
           style={{ width: 260 }}
         />
       </div>
-
-      {selectedCell ? (
-        <div
-          style={{
-            marginBottom: 12,
-            fontSize: 13,
-            color: "#4f5f4f",
-            background: "#f5f8f2",
-            border: "1px solid #d7e2d1",
-            borderRadius: 8,
-            padding: "8px 10px",
-            display: "inline-block",
-          }}
-        >
-          当前选中行允许高度:{" "}
-          {Math.round(
-            minHeightForRow(
-              selectedCell.r,
-              garden.rows,
-              designIntent.height.frontMin,
-              designIntent.height.backMin
-            )
-          )}
-          {" - "}
-          {Math.round(
-            maxHeightForRow(
-              selectedCell.r,
-              garden.rows,
-              designIntent.height.frontMax,
-              designIntent.height.backMax
-            )
-          )}
-        </div>
-      ) : null}
 
       {reportViewsActive ? (
         <div
@@ -1247,7 +1229,8 @@ export default function App() {
         ref={editorRef}
         style={{
           display: "flex",
-          gap: 20,
+          flexDirection: isCompactLayout ? "column" : "row",
+          gap: isCompactLayout ? 16 : 20,
           alignItems: "flex-start",
         }}
       >
@@ -1270,9 +1253,39 @@ export default function App() {
               }}
             >
               <div style={{ fontSize: 13, color: "#666" }}>
-                {frontViewMode === "edit"
-                  ? "点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，按 Delete 或 Backspace 可以删除。"
-                  : "效果预览是静态图，不可编辑；切回编辑模式后可继续摆放和删除植物。"}
+                {frontViewMode === "edit" && frontViewTextureLoadProgress && frontViewTextureLoadProgress.total > 0 ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
+                    <span style={{ whiteSpace: "nowrap" }}>
+                      正在加载植物贴图... {frontViewTextureLoadProgress.loaded} / {frontViewTextureLoadProgress.total}
+                    </span>
+                    <div
+                      style={{
+                        flex: "1 1 180px",
+                        minWidth: 120,
+                        maxWidth: 280,
+                        height: 6,
+                        borderRadius: 999,
+                        background: "#e6dfd3",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${Math.round(
+                            (frontViewTextureLoadProgress.loaded / Math.max(1, frontViewTextureLoadProgress.total)) * 100
+                          )}%`,
+                          height: "100%",
+                          background: "#6e8f72",
+                          transition: "width 120ms ease",
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : frontViewMode === "edit" ? (
+                  "点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，可按 Delete / Backspace，或点“删除植物”按钮。"
+                ) : (
+                  "效果预览是静态图，不可编辑；切回编辑模式后可继续摆放和删除植物。"
+                )}
               </div>
               <div
                 style={{
@@ -1333,12 +1346,14 @@ export default function App() {
                   setEditMode(false);
                   setSelectedCell(null);
                 }}
+                onTextureLoadProgressChange={setFrontViewTextureLoadProgress}
               />
             </div>
             {frontViewMode === "preview" ? (
               <div
                 style={{
                   width: canvasWidth,
+                  maxWidth: "100%",
                   minHeight: 420,
                   borderRadius: 16,
                   overflow: "hidden",
@@ -1390,19 +1405,19 @@ export default function App() {
         <div
           ref={catalogPaneRef}
           style={{
-            flex: "0 0 clamp(260px, 18vw, 340px)",
-            width: "clamp(260px, 18vw, 340px)",
-            position: "sticky",
-            top: 16,
+            flex: isCompactLayout ? "1 1 auto" : "0 0 clamp(260px, 18vw, 340px)",
+            width: isCompactLayout ? "100%" : "clamp(260px, 18vw, 340px)",
+            position: isCompactLayout ? "static" : "sticky",
+            top: isCompactLayout ? undefined : 16,
             alignSelf: "flex-start",
           }}
         >
           <div style={{ width: "100%" }}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: isPhoneLayout ? "wrap" : "nowrap" }}>
               <button
                 onClick={() => setRightPanel("catalog")}
                 style={{
-                  flex: 1,
+                  flex: isPhoneLayout ? "1 1 calc(50% - 4px)" : 1,
                   padding: "8px 10px",
                   borderRadius: 10,
                   border: rightPanel === "catalog" ? "1px solid #5f7a61" : "1px solid #d9d9d9",
@@ -1414,7 +1429,7 @@ export default function App() {
               <button
                 onClick={() => setRightPanel("auto")}
                 style={{
-                  flex: 1,
+                  flex: isPhoneLayout ? "1 1 calc(50% - 4px)" : 1,
                   padding: "8px 10px",
                   borderRadius: 10,
                   border: rightPanel === "auto" ? "1px solid #5f7a61" : "1px solid #d9d9d9",
@@ -1431,6 +1446,7 @@ export default function App() {
                   flex: "0 0 auto",
                   width: 34,
                   height: 34,
+                  marginLeft: isPhoneLayout ? "auto" : 0,
                   padding: 0,
                   borderRadius: 999,
                   border: "1px solid #d9d9d9",

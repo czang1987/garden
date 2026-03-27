@@ -56,6 +56,7 @@ type FrontViewProps = {
   onCellSelect?: (cell: { r: number; c: number }) => void;
   onCanvasBackgroundClick?: () => void;
   canvasWidth?: number;
+  onTextureLoadProgressChange?: (progress: { loaded: number; total: number } | null) => void;
 };
 
 function seededRandom(seed: number) {
@@ -485,6 +486,7 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     onCellSelect,
     onCanvasBackgroundClick,
     canvasWidth = 980,
+    onTextureLoadProgressChange,
   }: FrontViewProps,
   ref
 ) {
@@ -541,18 +543,21 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     if (uniqueCount === 0) {
       setTextureMap(new Map());
       setTextureLoadProgress(null);
+      onTextureLoadProgressChange?.(null);
       return;
     }
 
     (async () => {
       setTextureMap(new Map());
       setTextureLoadProgress({ loaded: 0, total: uniqueCount });
+      onTextureLoadProgressChange?.({ loaded: 0, total: uniqueCount });
       const nextTextureMap = await loadPlantTexturesForSeason(
         plantIds,
         garden.season,
         (loaded, total) => {
           if (canceled) return;
           setTextureLoadProgress({ loaded, total });
+          onTextureLoadProgressChange?.({ loaded, total });
         },
         (plantId, texture) => {
           if (canceled) return;
@@ -566,6 +571,7 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
       if (canceled) return;
       setTextureMap(nextTextureMap);
       setTextureLoadProgress(null);
+      onTextureLoadProgressChange?.(null);
 
       void (async () => {
         for (const season of PRELOAD_SEASON_ORDER) {
@@ -577,8 +583,9 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
 
     return () => {
       canceled = true;
+      onTextureLoadProgressChange?.(null);
     };
-  }, [garden.cells, garden.season]);
+  }, [garden.cells, garden.season, onTextureLoadProgressChange]);
 
   useEffect(() => {
     let canceled = false;
@@ -867,46 +874,6 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
 
   return (
     <div ref={mountRef} style={{ width: canvasWidth, minHeight: canvasH, position: "relative" }}>
-      {textureLoadProgress && textureLoadProgress.total > 0 ? (
-        <div
-          style={{
-            position: "absolute",
-            left: 12,
-            top: 12,
-            zIndex: 30,
-            width: 240,
-            padding: "10px 12px",
-            borderRadius: 12,
-            background: "rgba(255, 252, 246, 0.96)",
-            border: "1px solid #dfd7ca",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-          }}
-        >
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#4f5f4f", marginBottom: 6 }}>
-            正在加载植物贴图...
-          </div>
-          <div style={{ fontSize: 12, color: "#6e665b", marginBottom: 8 }}>
-            {textureLoadProgress.loaded} / {textureLoadProgress.total}
-          </div>
-          <div
-            style={{
-              height: 6,
-              borderRadius: 999,
-              background: "#e6dfd3",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.round((textureLoadProgress.loaded / Math.max(1, textureLoadProgress.total)) * 100)}%`,
-                height: "100%",
-                background: "#6e8f72",
-                transition: "width 120ms ease",
-              }}
-            />
-          </div>
-        </div>
-      ) : null}
       {hoverPlant ? (
         <div
           style={{
