@@ -267,6 +267,7 @@ export default function App() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [tutorialTargetRect, setTutorialTargetRect] = useState<DOMRect | null>(null);
+  const [reportViewsActive, setReportViewsActive] = useState(false);
   const [designIntentMessage, setDesignIntentMessage] = useState("");
   const [designIntentSummary, setDesignIntentSummary] = useState("");
   const [isApplyingAiIntent, setIsApplyingAiIntent] = useState(false);
@@ -668,35 +669,36 @@ export default function App() {
     }
   }
 
+  async function waitForReportFrontViews(timeoutMs = 15000) {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const rawSeasonalViews = [
+        { season: "spring" as Season, frontalPng: springFrontalReportFrontViewRef.current?.exportPng() ?? "" },
+        { season: "summer" as Season, frontalPng: summerFrontalReportFrontViewRef.current?.exportPng() ?? "" },
+        { season: "autumn" as Season, frontalPng: autumnFrontalReportFrontViewRef.current?.exportPng() ?? "" },
+        { season: "winter" as Season, frontalPng: winterFrontalReportFrontViewRef.current?.exportPng() ?? "" },
+      ];
+
+      if (rawSeasonalViews.every((view) => !!view.frontalPng)) {
+        return rawSeasonalViews;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+
+    throw new Error("四季 FrontView 还没有准备好，请稍等后再试。");
+  }
+
   async function exportDesignReport() {
     if (isExportingReport) return;
     setIsExportingReport(true);
+    setReportViewsActive(true);
     setExportProgressText("正在准备四季视图并整理设计说明...");
     setExportProgressValue(10);
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     try {
-      const rawSeasonalViews = [
-        {
-          season: "spring" as Season,
-          frontalPng: springFrontalReportFrontViewRef.current?.exportPng() ?? "",
-        },
-        {
-          season: "summer" as Season,
-          frontalPng: summerFrontalReportFrontViewRef.current?.exportPng() ?? "",
-        },
-        {
-          season: "autumn" as Season,
-          frontalPng: autumnFrontalReportFrontViewRef.current?.exportPng() ?? "",
-        },
-        {
-          season: "winter" as Season,
-          frontalPng: winterFrontalReportFrontViewRef.current?.exportPng() ?? "",
-        },
-      ];
-      if (rawSeasonalViews.some((view) => !view.frontalPng)) {
-        alert("设计说明里的 FrontView 还没有准备好，请稍等几秒后再试。");
-        return;
-      }
+      const rawSeasonalViews = await waitForReportFrontViews();
 
       let seasonalViews = rawSeasonalViews;
       if (frontViewExportStyle !== "download") {
@@ -750,6 +752,7 @@ export default function App() {
       const message = error instanceof Error ? error.message : String(error);
       alert(`导出设计说明失败：${message}`);
     } finally {
+      setReportViewsActive(false);
       setExportProgressText("");
       setExportProgressValue(null);
       window.setTimeout(() => setIsExportingReport(false), 0);
@@ -1084,43 +1087,45 @@ export default function App() {
         </div>
       ) : null}
 
-      <div
-        style={{
-          position: "fixed",
-          left: -20000,
-          top: 0,
-          width: reportCanvasWidth,
-          height: 10,
-          overflow: "hidden",
-          visibility: "hidden",
-          pointerEvents: "none",
-        }}
-      >
-        {reportSeasons.map((season) => {
-          const seasonalGarden = { ...garden, season };
-          const frontalRef =
-            season === "spring"
-              ? springFrontalReportFrontViewRef
-              : season === "summer"
-                ? summerFrontalReportFrontViewRef
-                : season === "autumn"
-                  ? autumnFrontalReportFrontViewRef
-                  : winterFrontalReportFrontViewRef;
-          return (
-            <div key={season}>
-              <FrontView
-                ref={frontalRef}
-                garden={seasonalGarden}
-                colGap={frontalMetrics.colGap}
-                rowGap={frontalMetrics.rowGap}
-                monetMode={false}
-                canvasWidth={reportCanvasWidth}
-                showEditGrid={false}
-              />
-            </div>
-          );
-        })}
-      </div>
+      {reportViewsActive ? (
+        <div
+          style={{
+            position: "fixed",
+            left: -20000,
+            top: 0,
+            width: reportCanvasWidth,
+            height: 10,
+            overflow: "hidden",
+            visibility: "hidden",
+            pointerEvents: "none",
+          }}
+        >
+          {reportSeasons.map((season) => {
+            const seasonalGarden = { ...garden, season };
+            const frontalRef =
+              season === "spring"
+                ? springFrontalReportFrontViewRef
+                : season === "summer"
+                  ? summerFrontalReportFrontViewRef
+                  : season === "autumn"
+                    ? autumnFrontalReportFrontViewRef
+                    : winterFrontalReportFrontViewRef;
+            return (
+              <div key={season}>
+                <FrontView
+                  ref={frontalRef}
+                  garden={seasonalGarden}
+                  colGap={frontalMetrics.colGap}
+                  rowGap={frontalMetrics.rowGap}
+                  monetMode={false}
+                  canvasWidth={reportCanvasWidth}
+                  showEditGrid={false}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
       {isGeneratingLayout || isExportingReport || isStylizingFrontView ? (
         <div
           style={{

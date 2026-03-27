@@ -13,6 +13,8 @@ const ENABLE_SWAY = true;
 const FRAME = 36;
 
 const DEPTH_K = 0.01;
+const PRELOAD_SEASON_ORDER = ["summer", "autumn", "spring", "winter"] as const;
+const plantTexturePromiseCache = new Map<string, Promise<PIXI.Texture>>();
 
 
 type PlantVariant = {
@@ -103,17 +105,29 @@ function footprintCenterBottom(
 }
 
 async function loadPlantTexture(plantId: string, season: string) {
-  const startedAt = performance.now();
-  const texture = await PIXI.Assets.load(`/assets/plants/${plantId}/${season}.png`);
-  const elapsedMs = Math.round(performance.now() - startedAt);
-  console.log(`[frontview] loaded plant texture ${plantId}/${season} in ${elapsedMs}ms`);
-  return texture;
+  const cacheKey = `${plantId}/${season}`;
+  const existing = plantTexturePromiseCache.get(cacheKey);
+  if (existing) {
+    return await existing;
+  }
+
+  const request = (async () => {
+    const startedAt = performance.now();
+    const texture = await PIXI.Assets.load(`/assets/plants/${plantId}/${season}.png`);
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    console.log(`[frontview] loaded plant texture ${plantId}/${season} in ${elapsedMs}ms`);
+    return texture;
+  })();
+
+  plantTexturePromiseCache.set(cacheKey, request);
+  return await request;
 }
 
 async function loadPlantTexturesForSeason(
   plantIds: string[],
   season: string,
-  onProgress?: (loaded: number, total: number) => void
+  onProgress?: (loaded: number, total: number) => void,
+  onLoaded?: (plantId: string, texture: PIXI.Texture, loaded: number, total: number) => void
 ) {
   const uniquePlantIds = Array.from(new Set(plantIds.filter((plantId) => !!plantId && plantId !== "empty")));
   const total = uniquePlantIds.length;
@@ -124,6 +138,7 @@ async function loadPlantTexturesForSeason(
       const texture = await loadPlantTexture(plantId, season);
       loaded += 1;
       onProgress?.(loaded, total);
+      onLoaded?.(plantId, texture, loaded, total);
       return [plantId, texture] as const;
     })
   );
@@ -521,6 +536,7 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     let canceled = false;
     const plantIds = garden.cells.map((cell) => cell.plant ?? "").filter((plantId) => !!plantId && plantId !== "empty");
     const uniqueCount = new Set(plantIds).size;
+    const uniquePlantIds = Array.from(new Set(plantIds));
 
     if (uniqueCount === 0) {
       setTextureMap(new Map());
@@ -529,14 +545,34 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     }
 
     (async () => {
+      setTextureMap(new Map());
       setTextureLoadProgress({ loaded: 0, total: uniqueCount });
-      const nextTextureMap = await loadPlantTexturesForSeason(plantIds, garden.season, (loaded, total) => {
-        if (canceled) return;
-        setTextureLoadProgress({ loaded, total });
-      });
+      const nextTextureMap = await loadPlantTexturesForSeason(
+        plantIds,
+        garden.season,
+        (loaded, total) => {
+          if (canceled) return;
+          setTextureLoadProgress({ loaded, total });
+        },
+        (plantId, texture) => {
+          if (canceled) return;
+          setTextureMap((prev) => {
+            const next = new Map(prev);
+            next.set(plantId, texture);
+            return next;
+          });
+        }
+      );
       if (canceled) return;
       setTextureMap(nextTextureMap);
       setTextureLoadProgress(null);
+
+      void (async () => {
+        for (const season of PRELOAD_SEASON_ORDER) {
+          if (canceled || season === garden.season) continue;
+          await loadPlantTexturesForSeason(uniquePlantIds, season);
+        }
+      })();
     })();
 
     return () => {
