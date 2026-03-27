@@ -106,6 +106,26 @@ async function loadPlantTexture(plantId: string, season: string) {
   return await PIXI.Assets.load(`/assets/plants/${plantId}/${season}.png`);
 }
 
+async function loadPlantTexturesForSeason(
+  plantIds: string[],
+  season: string,
+  onProgress?: (loaded: number, total: number) => void
+) {
+  const uniquePlantIds = Array.from(new Set(plantIds.filter((plantId) => !!plantId && plantId !== "empty")));
+  const total = uniquePlantIds.length;
+  let loaded = 0;
+  onProgress?.(loaded, total);
+  const entries = await Promise.all(
+    uniquePlantIds.map(async (plantId) => {
+      const texture = await loadPlantTexture(plantId, season);
+      loaded += 1;
+      onProgress?.(loaded, total);
+      return [plantId, texture] as const;
+    })
+  );
+  return new Map(entries);
+}
+
 async function drawBrickFrameEdges(
   layer: PIXI.Container,
   gridW: number,
@@ -456,6 +476,8 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
   const [hoverPlant, setHoverPlant] = useState<HoverPlant | null>(null);
 
   const [variantMap, setVariantMap] = useState<Map<string, PlantVariant>>(new Map());
+  const [textureMap, setTextureMap] = useState<Map<string, PIXI.Texture>>(new Map());
+  const [textureLoadProgress, setTextureLoadProgress] = useState<{ loaded: number; total: number } | null>(null);
   const defaultBaseY = Math.max(80, Math.round(colGap * 0.9));
   const [layoutMetrics, setLayoutMetrics] = useState<LayoutMetrics>(() => ({
     baseY: defaultBaseY,
@@ -493,6 +515,34 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
 
   useEffect(() => {
     let canceled = false;
+    const plantIds = garden.cells.map((cell) => cell.plant ?? "").filter((plantId) => !!plantId && plantId !== "empty");
+    const uniqueCount = new Set(plantIds).size;
+
+    if (uniqueCount === 0) {
+      setTextureMap(new Map());
+      setTextureLoadProgress(null);
+      return;
+    }
+
+    (async () => {
+      setTextureLoadProgress({ loaded: 0, total: uniqueCount });
+      const nextTextureMap = await loadPlantTexturesForSeason(plantIds, garden.season, (loaded, total) => {
+        if (canceled) return;
+        setTextureLoadProgress({ loaded, total });
+      });
+      if (canceled) return;
+      setTextureMap(nextTextureMap);
+      setTextureLoadProgress(null);
+    })();
+
+    return () => {
+      canceled = true;
+    };
+  }, [garden.cells, garden.season]);
+
+  useEffect(() => {
+    let canceled = false;
+    if (variantMap.size === 0) return;
 
     (async () => {
       const fallbackBaseY = Math.max(80, Math.round(colGap * 0.9));
@@ -505,8 +555,8 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
         if (!meta) continue;
 
         const fp = (meta.footprint ?? [1, 1]) as [number, number];
-        const tex = await loadPlantTexture(cell.plant, garden.season);
-        if (canceled) return;
+        const tex = textureMap.get(cell.plant);
+        if (!tex) continue;
 
         const widthScale = (colGap * fp[1]) / Math.max(tex.width || 1, 1);
         const rowDistanceToBack = maxRow - cell.row;
@@ -530,7 +580,7 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     return () => {
       canceled = true;
     };
-  }, [colGap, garden, rowGap, variantMap]);
+  }, [colGap, garden, rowGap, textureMap, variantMap]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -710,8 +760,8 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
 
         const meta = variantMap.get(plantId);
         const fp = (meta?.footprint ?? [1, 1]) as [number, number];
-        const tex = await loadPlantTexture(plantId, garden.season);
-        if (canceled) return;
+        const tex = textureMap.get(plantId);
+        if (!tex) continue;
 
         const sprite = new PIXI.Sprite(tex);
         sprite.anchor.set(0.5, 1);
@@ -773,10 +823,50 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     return () => {
       canceled = true;
     };
-  }, [appReady, baseX, baseY, canvasH, canvasWidth, colGap, garden, gridH, gridW, monetMode, rowGap, selectedCell, showEditGrid, symmetryHints, variantMap]);
+  }, [appReady, baseX, baseY, canvasH, canvasWidth, colGap, garden, gridH, gridW, monetMode, rowGap, selectedCell, showEditGrid, symmetryHints, textureMap, variantMap]);
 
   return (
     <div ref={mountRef} style={{ width: canvasWidth, minHeight: canvasH, position: "relative" }}>
+      {textureLoadProgress && textureLoadProgress.total > 0 ? (
+        <div
+          style={{
+            position: "absolute",
+            left: 12,
+            top: 12,
+            zIndex: 30,
+            width: 240,
+            padding: "10px 12px",
+            borderRadius: 12,
+            background: "rgba(255, 252, 246, 0.96)",
+            border: "1px solid #dfd7ca",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#4f5f4f", marginBottom: 6 }}>
+            正在加载植物贴图...
+          </div>
+          <div style={{ fontSize: 12, color: "#6e665b", marginBottom: 8 }}>
+            {textureLoadProgress.loaded} / {textureLoadProgress.total}
+          </div>
+          <div
+            style={{
+              height: 6,
+              borderRadius: 999,
+              background: "#e6dfd3",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${Math.round((textureLoadProgress.loaded / Math.max(1, textureLoadProgress.total)) * 100)}%`,
+                height: "100%",
+                background: "#6e8f72",
+                transition: "width 120ms ease",
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
       {hoverPlant ? (
         <div
           style={{
