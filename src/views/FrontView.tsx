@@ -548,7 +548,6 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     }
 
     (async () => {
-      setTextureMap(new Map());
       setTextureLoadProgress({ loaded: 0, total: uniqueCount });
       onTextureLoadProgressChange?.({ loaded: 0, total: uniqueCount });
       const nextTextureMap = await loadPlantTexturesForSeason(
