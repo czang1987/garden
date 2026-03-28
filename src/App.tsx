@@ -260,6 +260,7 @@ export default function App() {
   const [isGeneratingLayout, setIsGeneratingLayout] = useState(false);
   const [isExportingReport, setIsExportingReport] = useState(false);
   const [isStylizingFrontView, setIsStylizingFrontView] = useState(false);
+  const [isExportingTrainingAssets, setIsExportingTrainingAssets] = useState(false);
   const [frontViewMode, setFrontViewMode] = useState<"edit" | "preview">("edit");
   const [isGeneratingFrontViewPreview, setIsGeneratingFrontViewPreview] = useState(false);
   const [frontViewPreviewImage, setFrontViewPreviewImage] = useState("");
@@ -617,6 +618,132 @@ export default function App() {
     document.body.appendChild(a);
     a.click();
     a.remove();
+  }
+
+  async function dataUrlToBlob(dataUrl: string) {
+    const response = await fetch(dataUrl);
+    return await response.blob();
+  }
+
+  function normalizeDatasetStyleName(style: FrontViewExportStyle) {
+    return style === "download" ? "raw" : style;
+  }
+
+  async function exportTrainingAssets() {
+    if (isExportingTrainingAssets || isExportingReport || isStylizingFrontView) return;
+
+    const directoryApi = window as Window & typeof globalThis & {
+      showDirectoryPicker?: () => Promise<{
+        getDirectoryHandle: (name: string, options?: { create?: boolean }) => Promise<any>;
+      }>;
+    };
+
+    if (!directoryApi.showDirectoryPicker) {
+      alert("当前浏览器不支持直接写入目录。请使用最新版 Chrome / Edge 再试。");
+      return;
+    }
+
+    setIsExportingTrainingAssets(true);
+    setIsExportingReport(true);
+    setReportViewsActive(true);
+    setExportProgressText("请选择训练素材输出目录...");
+    setExportProgressValue(5);
+
+    try {
+      const rootHandle = await directoryApi.showDirectoryPicker();
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      const styleName = normalizeDatasetStyleName(frontViewExportStyle);
+      const datasetRootHandle = await rootHandle.getDirectoryHandle(`training-assets-${styleName}-${stamp}`, { create: true });
+      const inputHandle = await datasetRootHandle.getDirectoryHandle("input", { create: true });
+      const targetHandle = await datasetRootHandle.getDirectoryHandle("target", { create: true });
+
+      setExportProgressText("正在准备四季 FrontView 原图...");
+      setExportProgressValue(12);
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+      const rawSeasonalViews = await waitForReportFrontViews();
+
+      for (let i = 0; i < rawSeasonalViews.length; i++) {
+        const view = rawSeasonalViews[i];
+        const seasonBaseName = `${stamp}-${view.season}`;
+
+        setExportProgressText(`正在写入 ${view.season} 原图（${i + 1}/${rawSeasonalViews.length}）...`);
+        setExportProgressValue(18 + Math.round(((i + 1) / rawSeasonalViews.length) * 18));
+        const inputFileHandle = await inputHandle.getFileHandle(`${seasonBaseName}-input.png`, { create: true });
+        const inputWritable = await inputFileHandle.createWritable();
+        await inputWritable.write(await dataUrlToBlob(view.frontalPng));
+        await inputWritable.close();
+
+        let targetDataUrl = view.frontalPng;
+        let targetExt = "png";
+
+        if (frontViewExportStyle !== "download") {
+          setExportProgressText(`正在生成 ${view.season} 风格图（${i + 1}/${rawSeasonalViews.length}）...`);
+          setExportProgressValue(40 + Math.round(((i + 1) / rawSeasonalViews.length) * 45));
+          const stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle);
+          targetDataUrl = stylized.imageDataUrl;
+          targetExt = "jpg";
+        }
+
+        setExportProgressText(`正在写入 ${view.season} 目标图（${i + 1}/${rawSeasonalViews.length}）...`);
+        setExportProgressValue(65 + Math.round(((i + 1) / rawSeasonalViews.length) * 25));
+        const targetFileHandle = await targetHandle.getFileHandle(
+          `${seasonBaseName}-${styleName}-target.${targetExt}`,
+          { create: true }
+        );
+        const targetWritable = await targetFileHandle.createWritable();
+        await targetWritable.write(await dataUrlToBlob(targetDataUrl));
+        await targetWritable.close();
+      }
+
+      const metaHandle = await datasetRootHandle.getFileHandle("metadata.json", { create: true });
+      const metaWritable = await metaHandle.createWritable();
+      await metaWritable.write(
+        JSON.stringify(
+          {
+            generatedAt: stamp,
+            style: styleName,
+            seasons: reportSeasons,
+            garden: {
+              rows: garden.rows,
+              cols: garden.cols,
+              zone: garden.zone,
+              season: garden.season,
+            },
+            designIntent,
+            exportContext: {
+              frontViewExportStyle,
+              rowGapRatio,
+            },
+            namingRule: {
+              input: "{timestamp}-{season}-input.png",
+              target: `{timestamp}-{season}-${styleName}-target.${frontViewExportStyle === "download" ? "png" : "jpg"}`,
+            },
+          },
+          null,
+          2
+        )
+      );
+      await metaWritable.close();
+
+      setExportProgressText("训练素材已输出到所选目录。");
+      setExportProgressValue(100);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setExportProgressText("");
+        setExportProgressValue(null);
+        return;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      alert(`生成训练素材失败：${message}`);
+    } finally {
+      setReportViewsActive(false);
+      window.setTimeout(() => {
+        setIsExportingTrainingAssets(false);
+        setIsExportingReport(false);
+        setExportProgressText("");
+        setExportProgressValue(null);
+      }, 0);
+    }
   }
 
   async function exportFrontViewPng() {
@@ -1031,6 +1158,9 @@ export default function App() {
           <button onClick={exportFrontViewPng} disabled={isStylizingFrontView}>
             {isStylizingFrontView ? "正在生成风格图..." : "导出效果图"}
           </button>
+          <button onClick={exportTrainingAssets} disabled={isExportingTrainingAssets || isExportingReport || isStylizingFrontView}>
+            {isExportingTrainingAssets ? "正在生成训练素材..." : "生成训练素材"}
+          </button>
           <button onClick={exportDesignReport} disabled={isExportingReport}>
             {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
           </button>
@@ -1253,39 +1383,9 @@ export default function App() {
               }}
             >
               <div style={{ fontSize: 13, color: "#666" }}>
-                {frontViewMode === "edit" && frontViewTextureLoadProgress && frontViewTextureLoadProgress.total > 0 ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
-                    <span style={{ whiteSpace: "nowrap" }}>
-                      正在加载植物贴图... {frontViewTextureLoadProgress.loaded} / {frontViewTextureLoadProgress.total}
-                    </span>
-                    <div
-                      style={{
-                        flex: "1 1 180px",
-                        minWidth: 120,
-                        maxWidth: 280,
-                        height: 6,
-                        borderRadius: 999,
-                        background: "#e6dfd3",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${Math.round(
-                            (frontViewTextureLoadProgress.loaded / Math.max(1, frontViewTextureLoadProgress.total)) * 100
-                          )}%`,
-                          height: "100%",
-                          background: "#6e8f72",
-                          transition: "width 120ms ease",
-                        }}
-                      />
-                    </div>
-                  </div>
-                ) : frontViewMode === "edit" ? (
-                  "点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，可按 Delete / Backspace，或点“删除植物”按钮。"
-                ) : (
-                  "效果预览是静态图，不可编辑；切回编辑模式后可继续摆放和删除植物。"
-                )}
+                {frontViewMode === "edit"
+                  ? "点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，可按 Delete / Backspace，或点“删除植物”按钮。"
+                  : "效果预览是静态图，不可编辑；切回编辑模式后可继续摆放和删除植物。"}
               </div>
               <div
                 style={{

@@ -801,61 +801,73 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
         debugGridLayer.addChild(selectedOutline);
       }
 
+      const cellsByPlantId = new Map<string, GardenState["cells"]>();
       for (const cell of garden.cells) {
         const plantId = cell.plant;
         if (!plantId || plantId === "empty") continue;
+        const bucket = cellsByPlantId.get(plantId);
+        if (bucket) bucket.push(cell);
+        else cellsByPlantId.set(plantId, [cell]);
+      }
 
+      const maxRow = Math.max(0, garden.rows - 1);
+      for (const [plantId, cells] of cellsByPlantId) {
         const meta = variantMap.get(plantId);
-        const fp = (meta?.footprint ?? [1, 1]) as [number, number];
         const tex = textureMap.get(plantId);
         if (!tex) continue;
 
-        const sprite = new PIXI.Sprite(tex);
-        sprite.anchor.set(0.5, 1);
-        const { cx, by } = footprintCenterBottom(cell.row, cell.col, fp, rowGap, colGap, baseX, baseY);
-        sprite.position.set(cx, by);
-        if (monetMode) {
-          sprite.tint = tintFromFactor(-0.28);
-          sprite.alpha = 0.95;
-        }
+        const fp = (meta?.footprint ?? [1, 1]) as [number, number];
+        const targetWidth = colGap * fp[1];
+        const shadowWidth = 20 + fp[1] * 6;
+        const shadowHeight = 6 + fp[0] * 1.5;
 
-        const shadow = new PIXI.Graphics()
-          .ellipse(cx, by - 10, 20 + fp[1] * 6, 6 + fp[0] * 1.5)
-          .fill({ color: 0x6f7f76, alpha: monetMode ? 0.18 : 0.12 });
+        for (const cell of cells) {
+          const sprite = new PIXI.Sprite(tex);
+          sprite.anchor.set(0.5, 1);
+          const { cx, by } = footprintCenterBottom(cell.row, cell.col, fp, rowGap, colGap, baseX, baseY);
+          sprite.position.set(cx, by);
+          if (monetMode) {
+            sprite.tint = tintFromFactor(-0.28);
+            sprite.alpha = 0.95;
+          }
 
-        fitSpriteByWidth(sprite, colGap * fp[1]);
-        const maxRow = Math.max(0, garden.rows - 1);
-        const rowDistanceToBack = maxRow - cell.row;
-        const depth = Math.max(0.55, 1 - rowDistanceToBack * DEPTH_K);
-        sprite.scale.set(sprite.scale.x * depth, sprite.scale.y * depth);
+          const shadow = new PIXI.Graphics()
+            .ellipse(cx, by - 10, shadowWidth, shadowHeight)
+            .fill({ color: 0x6f7f76, alpha: monetMode ? 0.18 : 0.12 });
 
-        const zBase = Math.round(by * 100);
-        shadow.zIndex = zBase;
-        sprite.zIndex = zBase + 1;
+          fitSpriteByWidth(sprite, targetWidth);
+          const rowDistanceToBack = maxRow - cell.row;
+          const depth = Math.max(0.55, 1 - rowDistanceToBack * DEPTH_K);
+          sprite.scale.set(sprite.scale.x * depth, sprite.scale.y * depth);
 
-        plantLayer.addChild(shadow);
-        plantLayer.addChild(sprite);
+          const zBase = Math.round(by * 100);
+          shadow.zIndex = zBase;
+          sprite.zIndex = zBase + 1;
 
-        const seed = cell.row * 1000 + cell.col * 13;
-        const amp = 0.012 + seededRandom(seed) * 0.008;
-        const speed = 0.5 + seededRandom(seed + 1) * 0.35;
-        const phase = seededRandom(seed + 2) * Math.PI * 2;
-        const baseRot = (seededRandom(seed + 3) - 0.5) * 0.01;
+          plantLayer.addChild(shadow);
+          plantLayer.addChild(sprite);
 
-        if (SHOW_DEBUG_PLANT_BOUNDS) {
-          const localBox = new PIXI.Graphics()
-            .rect(-sprite.width / 2, -sprite.height, sprite.width, sprite.height)
-            .stroke({ color: 0xffffff, width: 1, alpha: 0.9 });
-          sprite.addChild(localBox);
-        }
+          const seed = cell.row * 1000 + cell.col * 13;
+          const amp = 0.012 + seededRandom(seed) * 0.008;
+          const speed = 0.5 + seededRandom(seed + 1) * 0.35;
+          const phase = seededRandom(seed + 2) * Math.PI * 2;
+          const baseRot = (seededRandom(seed + 3) - 0.5) * 0.01;
 
-        if (ENABLE_SWAY) {
-          app.ticker.add(() => {
-            const t = app.ticker.lastTime / 1000;
-            sprite.rotation = baseRot + Math.sin(t * speed + phase) * amp;
-          });
-        } else {
-          sprite.rotation = 0;
+          if (SHOW_DEBUG_PLANT_BOUNDS) {
+            const localBox = new PIXI.Graphics()
+              .rect(-sprite.width / 2, -sprite.height, sprite.width, sprite.height)
+              .stroke({ color: 0xffffff, width: 1, alpha: 0.9 });
+            sprite.addChild(localBox);
+          }
+
+          if (ENABLE_SWAY) {
+            app.ticker.add(() => {
+              const t = app.ticker.lastTime / 1000;
+              sprite.rotation = baseRot + Math.sin(t * speed + phase) * amp;
+            });
+          } else {
+            sprite.rotation = 0;
+          }
         }
       }
 
