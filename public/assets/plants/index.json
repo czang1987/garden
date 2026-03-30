@@ -303,6 +303,28 @@
           "maintenance": 1
         },
         {
+          "id": "pansy",
+          "name": "三色堇 pansy",
+          "icon": "assets/plants/pansy/summer.png",
+          "link": "https://www.lowes.com/pd/Ferry-Morse-LCA-PANSY-SWISS-GIANTS-MC/5015733165",
+          "zone": "5-9",
+          "baseHeight": 8,
+          "baseWidth": 24,
+          "footprint": [
+            2,
+            2
+          ],
+          "color": "purple",
+          "tags": [],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": [
+            "summer",
+            "autumn"
+          ],
+          "maintenance": 2
+        },
+        {
           "id": "sweet_alyssum_white",
           "name": "香雪球 SWEET ALYSSUM(white)",
           "icon": "assets/plants/sweet_alyssum_white/summer.png",
@@ -352,7 +374,56 @@
           "sun": "full",
           "water": "dry",
           "bloomSeasons": [],
-          "maintenance": 1
+          "maintenance": 1,
+          "evergreen":true
+        },
+         {
+          "id": "pittosporum",
+          "name": "海桐 Pittosporum",
+          "icon": "/assets/plants/pittosporum/summer.png",
+          "link": "https://www.fast-growing-trees.com/products/variegated-pittosporum?_pos=1&_sid=5cc26fcb1&_ss=r",
+          "zone": "8-11",
+          "baseHeight": 24,
+          "baseWidth": 36,
+          "footprint": [
+            3,
+            3
+          ],
+          "color": "yellow",
+          "tags": [
+            "常绿",
+            "低维护",
+            "边界"
+          ],
+          "sun": "full",
+          "water": "once",
+          "bloomSeasons": [],
+          "maintenance": 1,
+          "evergreen":true
+        },
+        {
+          "id": "sprinter_boxwood",
+          "name": "速生黄杨",
+          "icon": "/assets/plants/sprinter_boxwood/spring.png",
+          "link": "https://www.provenwinners.com/plants/buxus/sprinter-boxwood-buxus-microphylla",
+          "zone": "5-9",
+          "baseHeight": 36,
+          "baseWidth": 36,
+          "footprint": [
+            3,
+            3
+          ],
+          "color": "green",
+          "tags": [
+            "常绿",
+            "低维护",
+            "边界"
+          ],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": [],
+          "maintenance": 1,
+          "evergreen":true
         },
         {
           "id": "arborvitae_emerald_green",
@@ -375,7 +446,8 @@
           "sun": "full",
           "water": "dry",
           "bloomSeasons": [],
-          "maintenance": 2
+          "maintenance": 2,
+          "evergreen":true
         }
       ]
     },
