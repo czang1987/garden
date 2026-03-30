@@ -377,8 +377,32 @@
           "maintenance": 1,
           "evergreen":true
         },
+        {
+          "id": "sunshine_ligustrum",
+          "name": "金叶女贞 SunshineLigustrum",
+          "icon": "/assets/plants/sunshine_ligustrum/summer.png",
+          "link": "https://www.homedepot.com/p/SOUTHERN-LIVING-2-Gal-Sunshine-Ligustrum-Privet-Shrub-with-Golden-Yellow-Foliage-14434/312135821#overlay",
+          "zone": "6-10",
+          "baseHeight": 48,
+          "baseWidth": 60,
+          "footprint": [
+            4,
+            4
+          ],
+          "color": "yellow",
+          "tags": [
+            "常绿",
+            "低维护",
+            "边界"
+          ],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": [],
+          "maintenance": 1,
+          "evergreen":true
+        },
          {
-          "id": "pittosporum",
+          "id": "p1ittosporum",
           "name": "海桐 Pittosporum",
           "icon": "/assets/plants/pittosporum/summer.png",
           "link": "https://www.fast-growing-trees.com/products/variegated-pittosporum?_pos=1&_sid=5cc26fcb1&_ss=r",
