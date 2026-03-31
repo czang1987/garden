@@ -21,17 +21,32 @@ async function getImageDataUrlDimensions(imageDataUrl: string): Promise<{ width:
 
 export async function stylizeFrontViewImage(
   imageDataUrl: string,
-  style: Exclude<FrontViewExportStyle, "download">
+  style: Exclude<FrontViewExportStyle, "download">,
+  options?: { backgroundImageDataUrl?: string | null }
 ): Promise<{ imageDataUrl: string }> {
   const apiBase = ((import.meta.env.VITE_STYLIZE_API_BASE as string | undefined)?.trim() || "").replace(/\/+$/, "");
   const apiBaseRemote = (import.meta.env.VITE_STYLIZE_API_BASE_REMOTE as string | undefined)?.trim() || "";
+  const backgroundImageDataUrl = options?.backgroundImageDataUrl?.trim() || "";
   let dimensions: { width: number; height: number } | null = null;
   try {
     dimensions = await getImageDataUrlDimensions(imageDataUrl);
   } catch (error) {
     console.warn("[stylize] failed to inspect image dimensions", error);
   }
-  console.log("[stylize] apiBase =", apiBase, "apiBaseRemote =", apiBaseRemote, "style =", style, "length =", imageDataUrl.length, "dimensions =", dimensions);
+  console.log(
+    "[stylize] apiBase =",
+    apiBase,
+    "apiBaseRemote =",
+    apiBaseRemote,
+    "style =",
+    style,
+    "length =",
+    imageDataUrl.length,
+    "dimensions =",
+    dimensions,
+    "hasBackground =",
+    !!backgroundImageDataUrl
+  );
   const res = await fetch(`${apiBase}/api/stylize`, {
     method: "POST",
     headers: {
@@ -39,6 +54,7 @@ export async function stylizeFrontViewImage(
     },
     body: JSON.stringify({
       imageDataUrl,
+      backgroundImageDataUrl: backgroundImageDataUrl || undefined,
       style,
     }),
   });

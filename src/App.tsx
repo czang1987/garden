@@ -282,6 +282,7 @@ export default function App() {
   const [isGeneratingFrontViewPreview, setIsGeneratingFrontViewPreview] = useState(false);
   const [frontViewPreviewImage, setFrontViewPreviewImage] = useState("");
   const [frontViewPreviewError, setFrontViewPreviewError] = useState("");
+  const [backgroundReferenceImage, setBackgroundReferenceImage] = useState<{ name: string; dataUrl: string } | null>(null);
   const [frontViewTextureLoadProgress, setFrontViewTextureLoadProgress] = useState<{ loaded: number; total: number } | null>(null);
   const [exportProgressText, setExportProgressText] = useState("");
   const [exportProgressValue, setExportProgressValue] = useState<number | null>(null);
@@ -331,6 +332,7 @@ export default function App() {
   const summerFrontalReportFrontViewRef = useRef<FrontViewHandle | null>(null);
   const autumnFrontalReportFrontViewRef = useRef<FrontViewHandle | null>(null);
   const winterFrontalReportFrontViewRef = useRef<FrontViewHandle | null>(null);
+  const backgroundImageInputRef = useRef<HTMLInputElement | null>(null);
   const catalogPaneRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -2122,6 +2124,62 @@ export default function App() {
     return await response.blob();
   }
 
+  async function fileToDataUrl(file: File) {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+          return;
+        }
+        reject(new Error("读取背景图片失败"));
+      };
+      reader.onerror = () => reject(reader.error ?? new Error("读取背景图片失败"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function normalizeBackgroundImageDataUrl(dataUrl: string) {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("背景图片读取失败"));
+      image.src = dataUrl;
+    });
+    const maxWidth = 1600;
+    const maxHeight = 1200;
+    const scale = Math.min(1, maxWidth / Math.max(1, img.naturalWidth), maxHeight / Math.max(1, img.naturalHeight));
+    const width = Math.max(1, Math.round(img.naturalWidth * scale));
+    const height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("浏览器不支持背景图片压缩");
+    }
+    ctx.drawImage(img, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.82);
+  }
+
+  async function handleBackgroundReferenceFile(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("请选择图片文件作为背景参考。");
+      return;
+    }
+    try {
+      const rawDataUrl = await fileToDataUrl(file);
+      const normalizedDataUrl = await normalizeBackgroundImageDataUrl(rawDataUrl);
+      setBackgroundReferenceImage({ name: file.name, dataUrl: normalizedDataUrl });
+      setFrontViewPreviewImage("");
+      setFrontViewPreviewError("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      alert(`读取背景图片失败：${message}`);
+    }
+  }
+
   function normalizeDatasetStyleName(style: FrontViewExportStyle) {
     return style === "download" ? "raw" : style;
   }
@@ -2176,7 +2234,9 @@ export default function App() {
         if (frontViewExportStyle !== "download") {
           setExportProgressText(`正在生成 ${view.season} 风格图（${i + 1}/${rawSeasonalViews.length}）...`);
           setExportProgressValue(40 + Math.round(((i + 1) / rawSeasonalViews.length) * 45));
-          const stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle);
+          const stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle, {
+            backgroundImageDataUrl: backgroundReferenceImage?.dataUrl,
+          });
           targetDataUrl = stylized.imageDataUrl;
           targetExt = "jpg";
         }
@@ -2210,6 +2270,7 @@ export default function App() {
             exportContext: {
               frontViewExportStyle,
               rowGapRatio,
+              backgroundReferenceImageName: backgroundReferenceImage?.name || "",
             },
             namingRule: {
               input: "{timestamp}-{season}-input.png",
@@ -2263,7 +2324,9 @@ export default function App() {
     setExportProgressValue(frontViewExportStyle === "download" ? 30 : 20);
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     try {
-      const result = await stylizeFrontViewImage(url, frontViewExportStyle);
+      const result = await stylizeFrontViewImage(url, frontViewExportStyle, {
+        backgroundImageDataUrl: backgroundReferenceImage?.dataUrl,
+      });
       setExportProgressText("风格图已生成，正在下载...");
       setExportProgressValue(90);
       downloadDataUrl(result.imageDataUrl, `frontview-${frontViewExportStyle}-${stamp}.jpg`);
@@ -2296,7 +2359,9 @@ export default function App() {
     setIsGeneratingFrontViewPreview(true);
     setFrontViewPreviewImage("");
     try {
-      const result = await stylizeFrontViewImage(url, frontViewExportStyle);
+      const result = await stylizeFrontViewImage(url, frontViewExportStyle, {
+        backgroundImageDataUrl: backgroundReferenceImage?.dataUrl,
+      });
       setFrontViewPreviewImage(result.imageDataUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -2346,7 +2411,9 @@ export default function App() {
           setExportProgressValue(15 + Math.round(((i + 1) / rawSeasonalViews.length) * 60));
           let stylized;
           try {
-            stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle);
+            stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle, {
+              backgroundImageDataUrl: backgroundReferenceImage?.dataUrl,
+            });
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             throw new Error(`${view.season} 季效果图生成失败：${message}`);
@@ -2599,7 +2666,7 @@ export default function App() {
   useEffect(() => {
     setFrontViewPreviewImage("");
     setFrontViewPreviewError("");
-  }, [garden, rowGap, colGap, canvasWidth, frontViewExportStyle]);
+  }, [garden, rowGap, colGap, canvasWidth, frontViewExportStyle, backgroundReferenceImage?.dataUrl]);
 
   useEffect(() => {
     if (!showTutorial) {
@@ -3061,6 +3128,69 @@ export default function App() {
                     <option value="botanical">植物学插画</option>
                     <option value="pastel">粉彩</option>
                   </select>
+                  <input
+                    ref={backgroundImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      void handleBackgroundReferenceFile(e.currentTarget.files?.[0] ?? null);
+                      e.currentTarget.value = "";
+                    }}
+                    style={{ display: "none" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => backgroundImageInputRef.current?.click()}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 999,
+                      border: "1px solid #cdbdb3",
+                      background: "#f6f1e8",
+                      color: "#5e4c3c",
+                      whiteSpace: "nowrap",
+                      cursor: "pointer",
+                    }}
+                    title="上传一张房子或立面背景图，生成效果图时会让 AI 参考这个背景"
+                  >
+                    {backgroundReferenceImage ? "更换背景" : "上传背景"}
+                  </button>
+                  {backgroundReferenceImage ? (
+                    <>
+                      <span
+                        title={backgroundReferenceImage.name}
+                        style={{
+                          maxWidth: 160,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontSize: 12,
+                          color: "#6f6558",
+                          padding: "0 2px",
+                        }}
+                      >
+                        {backgroundReferenceImage.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBackgroundReferenceImage(null);
+                          setFrontViewPreviewImage("");
+                          setFrontViewPreviewError("");
+                        }}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 999,
+                          border: "1px solid #d9d0c4",
+                          background: "#fbf7ef",
+                          color: "#7a6d5e",
+                          whiteSpace: "nowrap",
+                          cursor: "pointer",
+                        }}
+                      >
+                        清除背景
+                      </button>
+                    </>
+                  ) : null}
                   <button
                     onClick={exportFrontViewPng}
                     disabled={isStylizingFrontView}

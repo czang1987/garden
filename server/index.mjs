@@ -7,6 +7,7 @@ const ARK_BASE_URL = process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.
 const ARK_MODEL = process.env.ARK_MODEL || "doubao-seedream-4-0-250828";
 const ARK_TEXT_MODEL = process.env.ARK_TEXT_MODEL || "";
 const AI_CHAT_LOG_PATH = path.resolve(process.cwd(), "server", "logs", "design-intent-chat.log");
+const MAX_REQUEST_BODY_BYTES = 40 * 1024 * 1024;
 
 const PROMPTS = {
   monet:
@@ -28,6 +29,15 @@ const PROMPTS = {
   pastel:
     "Transform this garden front-view design into a soft pastel painting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same layout and structure. Use gentle pastel color transitions, powdery texture, soft edges, atmospheric light, and a dreamy hand-painted quality. Keep plant masses readable.",
 };
+
+const BACKGROUND_REFERENCE_PROMPT =
+  "When a second reference image is provided, treat it as the actual site/background context behind the garden. The first image is the exact garden front-view layout to preserve. The second image is the background to place the garden in front of. If the second image shows a house, facade, porch, windows, front steps, foundation wall, or entry walk, keep that architecture recognizable and believable, and compose the planting naturally in front of it. Preserve the garden composition from the first image while integrating the background from the second image with realistic spatial depth and proportion. Keep the background secondary to the planting and do not let it overwrite or rearrange the garden layout.";
+
+function buildStylizePrompt(style, hasBackgroundReference) {
+  const basePrompt = PROMPTS[style];
+  if (!basePrompt) return null;
+  return hasBackgroundReference ? `${basePrompt} ${BACKGROUND_REFERENCE_PROMPT}` : basePrompt;
+}
 
 function sendJson(res, status, data) {
   res.writeHead(status, {
@@ -360,10 +370,11 @@ function readImageDimensionsFromBase64(mimeType, base64) {
 
 async function readJsonBody(req) {
   const chunks = [];
+  let total = 0;
   for await (const chunk of req) {
     chunks.push(chunk);
-    const total = chunks.reduce((sum, item) => sum + item.length, 0);
-    if (total > 20 * 1024 * 1024) {
+    total += chunk.length;
+    if (total > MAX_REQUEST_BODY_BYTES) {
       throw new Error("Request body too large");
     }
   }
@@ -371,7 +382,7 @@ async function readJsonBody(req) {
   return JSON.parse(raw || "{}");
 }
 
-async function generateStylizedImage(imageDataUrl, style) {
+async function generateStylizedImage(imageDataUrl, style, backgroundImageDataUrl) {
   const apiKey = process.env.ARK_API_KEY;
   if (!apiKey) {
     throw new Error("Missing ARK_API_KEY on local stylize server");
@@ -380,12 +391,21 @@ async function generateStylizedImage(imageDataUrl, style) {
   const { mimeType, base64 } = splitDataUrl(imageDataUrl);
   const inputDataUrl = `data:${mimeType};base64,${base64}`;
   const dimensions = readImageDimensionsFromBase64(mimeType, base64);
+  const backgroundReference =
+    typeof backgroundImageDataUrl === "string" && backgroundImageDataUrl.startsWith("data:image/")
+      ? splitDataUrl(backgroundImageDataUrl)
+      : null;
+  const prompt = buildStylizePrompt(style, !!backgroundReference);
   logInfo("Generating stylized image", {
     style,
     model: ARK_MODEL,
     mimeType,
     inputBytesApprox: Math.round((base64.length * 3) / 4),
     dimensions,
+    hasBackgroundReference: !!backgroundReference,
+    backgroundDimensions: backgroundReference
+      ? readImageDimensionsFromBase64(backgroundReference.mimeType, backgroundReference.base64)
+      : null,
   });
 
   const generationRes = await fetch(`${ARK_BASE_URL}/images/generations`, {
@@ -396,8 +416,10 @@ async function generateStylizedImage(imageDataUrl, style) {
     },
     body: JSON.stringify({
       model: ARK_MODEL,
-      prompt: PROMPTS[style],
-      image: [inputDataUrl],
+      prompt,
+      image: backgroundReference
+        ? [inputDataUrl, `data:${backgroundReference.mimeType};base64,${backgroundReference.base64}`]
+        : [inputDataUrl],
       seed: 123,
       guidance_scale: 5.5,
       size: "2k",
@@ -473,6 +495,8 @@ const server = http.createServer(async (req, res) => {
         style: body.style,
         validStyle: !!style,
         hasImageDataUrl: typeof body.imageDataUrl === "string",
+        hasBackgroundImageDataUrl:
+          typeof body.backgroundImageDataUrl === "string" && body.backgroundImageDataUrl.startsWith("data:image/"),
       });
       if (!style) {
         sendJson(res, 400, { error: "Invalid style" });
@@ -482,7 +506,14 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { error: "Invalid imageDataUrl" });
         return;
       }
-      const result = await generateStylizedImage(body.imageDataUrl, style);
+      if (
+        body.backgroundImageDataUrl !== undefined &&
+        (typeof body.backgroundImageDataUrl !== "string" || !body.backgroundImageDataUrl.startsWith("data:image/"))
+      ) {
+        sendJson(res, 400, { error: "Invalid backgroundImageDataUrl" });
+        return;
+      }
+      const result = await generateStylizedImage(body.imageDataUrl, style, body.backgroundImageDataUrl);
       logInfo("Stylize request completed", { style });
       sendJson(res, 200, result);
       return;
