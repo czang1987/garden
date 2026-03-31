@@ -1,9 +1,12 @@
+import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
 
 const PORT = Number(process.env.STYLIZE_PORT || 8787);
 const ARK_BASE_URL = process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
 const ARK_MODEL = process.env.ARK_MODEL || "doubao-seedream-4-0-250828";
 const ARK_TEXT_MODEL = process.env.ARK_TEXT_MODEL || "";
+const AI_CHAT_LOG_PATH = path.resolve(process.cwd(), "server", "logs", "design-intent-chat.log");
 
 const PROMPTS = {
   monet:
@@ -54,6 +57,16 @@ function logError(message, extra) {
     return;
   }
   console.error(`[${now()}] ${message}`);
+}
+
+function appendAiChatLog(entry) {
+  try {
+    fs.mkdirSync(path.dirname(AI_CHAT_LOG_PATH), { recursive: true });
+    fs.appendFileSync(AI_CHAT_LOG_PATH, `${JSON.stringify({ timestamp: now(), ...entry })}\n`, "utf8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logError("Failed to append AI chat log", { message });
+  }
 }
 
 function maskSecret(secret) {
@@ -503,7 +516,17 @@ const server = http.createServer(async (req, res) => {
         summary: result.summary,
         patch: result.patch,
       });
-      logInfo("Design intent delta preview", summarizeDesignIntentDelta(designIntent, result.patch));
+      const deltaPreview = summarizeDesignIntentDelta(designIntent, result.patch);
+      logInfo("Design intent delta preview", deltaPreview);
+      appendAiChatLog({
+        message,
+        zone,
+        availableColors,
+        source: result.source,
+        summary: result.summary,
+        patch: result.patch,
+        deltaPreview,
+      });
       sendJson(res, 200, result);
       return;
     }
@@ -511,7 +534,27 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 404, { error: "Not found" });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logError("Unhandled request error", { message });
+    const errorDetails =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            cause:
+              error.cause && typeof error.cause === "object"
+                ? {
+                    ...(typeof error.cause.name === "string" ? { name: error.cause.name } : {}),
+                    ...(typeof error.cause.message === "string" ? { message: error.cause.message } : {}),
+                    ...(typeof error.cause.code === "string" ? { code: error.cause.code } : {}),
+                    ...(typeof error.cause.errno === "number" ? { errno: error.cause.errno } : {}),
+                    ...(typeof error.cause.syscall === "string" ? { syscall: error.cause.syscall } : {}),
+                    ...(typeof error.cause.address === "string" ? { address: error.cause.address } : {}),
+                    ...(typeof error.cause.port === "number" ? { port: error.cause.port } : {}),
+                  }
+                : error.cause,
+          }
+        : { message };
+    logError("Unhandled request error", errorDetails);
     sendJson(res, 500, { error: message });
   }
 });

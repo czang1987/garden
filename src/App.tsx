@@ -37,6 +37,7 @@ function DualSlider({
   rightValue,
   onLeftChange,
   onRightChange,
+  onInteractionStart,
   width = 260,
 }: {
   min: number;
@@ -46,6 +47,7 @@ function DualSlider({
   rightValue: number;
   onLeftChange: (value: number) => void;
   onRightChange: (value: number) => void;
+  onInteractionStart?: () => void;
   width?: number;
 }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -83,6 +85,7 @@ function DualSlider({
         ref={trackRef}
         onPointerDown={(event) => {
           if (!trackRef.current) return;
+          onInteractionStart?.();
           const rect = trackRef.current.getBoundingClientRect();
           const pct = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 100;
           setDragging(Math.abs(pct - leftPct) <= Math.abs(pct - rightPct) ? "left" : "right");
@@ -114,6 +117,7 @@ function DualSlider({
             key={thumb.side}
             onPointerDown={(event) => {
               event.stopPropagation();
+              onInteractionStart?.();
               setDragging(thumb.side);
             }}
             style={{
@@ -240,6 +244,16 @@ function ColorDotSelect({
 }
 
 export default function App() {
+  type UndoSnapshot = {
+    garden: GardenState;
+    designIntent: DesignIntent;
+    designIntentSummary: string;
+    designIntentChanges: string[];
+    selectedCell: { r: number; c: number } | null;
+    editMode: boolean;
+    frontViewMode: "edit" | "preview";
+  };
+
   const apiBase = ((import.meta.env.VITE_STYLIZE_API_BASE as string | undefined)?.trim() || "").replace(/\/+$/, "");
   const apiBaseRemote = ((import.meta.env.VITE_STYLIZE_API_BASE_REMOTE as string | undefined)?.trim() || "").replace(/\/+$/, "");
   const [viewportWidth, setViewportWidth] = useState(
@@ -257,7 +271,7 @@ export default function App() {
   const [catalogPaneWidth, setCatalogPaneWidth] = useState(320);
   const [designIntent, setDesignIntent] = useState<DesignIntent>(DEFAULT_DESIGN_INTENT);
   const [lastDensityBand, setLastDensityBand] = useState<"front" | "middle" | "back" | null>(null);
-  const [lastColorPruneKey, setLastColorPruneKey] = useState<string | null>(null);
+  const [colorPruneQueue, setColorPruneQueue] = useState<string[]>([]);
   const [rightPanel, setRightPanel] = useState<"catalog" | "auto">("auto");
   const [selectedColorPreference, setSelectedColorPreference] = useState("");
   const [isGeneratingLayout, setIsGeneratingLayout] = useState(false);
@@ -278,9 +292,17 @@ export default function App() {
   const [reportViewsActive, setReportViewsActive] = useState(false);
   const [designIntentMessage, setDesignIntentMessage] = useState("");
   const [designIntentSummary, setDesignIntentSummary] = useState("");
+  const [designIntentChanges, setDesignIntentChanges] = useState<string[]>([]);
   const [isApplyingAiIntent, setIsApplyingAiIntent] = useState(false);
   const previousSymmetryRef = useRef(designIntent.layout.symmetry);
+  const previousHeightRef = useRef(structuredClone(designIntent.height));
+  const previousDensityRef = useRef(structuredClone(designIntent.density));
   const designIntentRef = useRef(designIntent);
+  const undoStackRef = useRef<UndoSnapshot[]>([]);
+  const redoStackRef = useRef<UndoSnapshot[]>([]);
+  const skipAutoAdjustRef = useRef(false);
+  const [undoDepth, setUndoDepth] = useState(0);
+  const [redoDepth, setRedoDepth] = useState(0);
   const availableColors = useMemo(
     () =>
       Array.from(
@@ -433,6 +455,325 @@ export default function App() {
 
   const frontalMetrics = useMemo(() => computeViewMetrics(reportCanvasWidth, 0.22), [garden.cols]);
   const reportSeasons: Season[] = ["spring", "summer", "autumn", "winter"];
+  const canUndo = undoDepth > 0;
+  const canRedo = redoDepth > 0;
+
+  function buildUndoSnapshot(): UndoSnapshot {
+    return {
+      garden: structuredClone(garden),
+      designIntent: structuredClone(designIntent),
+      designIntentSummary,
+      designIntentChanges: [...designIntentChanges],
+      selectedCell: selectedCell ? { ...selectedCell } : null,
+      editMode,
+      frontViewMode,
+    };
+  }
+
+  function isSameSnapshot(a: UndoSnapshot, b: UndoSnapshot) {
+    return (
+      JSON.stringify(a.garden) === JSON.stringify(b.garden) &&
+      JSON.stringify(a.designIntent) === JSON.stringify(b.designIntent) &&
+      a.designIntentSummary === b.designIntentSummary &&
+      JSON.stringify(a.designIntentChanges) === JSON.stringify(b.designIntentChanges) &&
+      JSON.stringify(a.selectedCell) === JSON.stringify(b.selectedCell) &&
+      a.editMode === b.editMode &&
+      a.frontViewMode === b.frontViewMode
+    );
+  }
+
+  function summarizeDesignIntentChanges(current: DesignIntent, next: DesignIntent) {
+    const changes: string[] = [];
+    const pushChange = (label: string, before: number, after: number) => {
+      if (before === after) return;
+      changes.push(`${label}: ${before.toFixed(2)} -> ${after.toFixed(2)}`);
+    };
+
+    pushChange("frontMin", current.height.frontMin, next.height.frontMin);
+    pushChange("backMin", current.height.backMin, next.height.backMin);
+    pushChange("frontMax", current.height.frontMax, next.height.frontMax);
+    pushChange("backMax", current.height.backMax, next.height.backMax);
+    pushChange("gradientStrength", current.height.gradientStrength, next.height.gradientStrength);
+    pushChange("density.front", current.density.front, next.density.front);
+    pushChange("density.middle", current.density.middle, next.density.middle);
+    pushChange("density.back", current.density.back, next.density.back);
+    pushChange("layout.symmetry", current.layout.symmetry, next.layout.symmetry);
+    pushChange("layout.clusteriness", current.layout.clusteriness, next.layout.clusteriness);
+
+    const colorKeys = Array.from(
+      new Set([...Object.keys(current.color.preferences), ...Object.keys(next.color.preferences)])
+    ).sort();
+    for (const color of colorKeys) {
+      pushChange(
+        `color.${color}`,
+        current.color.preferences[color] ?? 0,
+        next.color.preferences[color] ?? 0
+      );
+    }
+
+    const plantKeys = Array.from(
+      new Set([...Object.keys(current.plant.preferences), ...Object.keys(next.plant.preferences)])
+    ).sort();
+    for (const key of plantKeys) {
+      pushChange(
+        `plant.${key}`,
+        current.plant.preferences[key] ?? 0,
+        next.plant.preferences[key] ?? 0
+      );
+    }
+
+    return changes;
+  }
+
+  function captureUndoSnapshot() {
+    const nextSnapshot = buildUndoSnapshot();
+    const lastSnapshot = undoStackRef.current[undoStackRef.current.length - 1];
+    if (lastSnapshot && isSameSnapshot(lastSnapshot, nextSnapshot)) return;
+    undoStackRef.current = [...undoStackRef.current, nextSnapshot].slice(-30);
+    redoStackRef.current = [];
+    setUndoDepth(undoStackRef.current.length);
+    setRedoDepth(0);
+  }
+
+  function applySnapshot(snapshot: UndoSnapshot) {
+    skipAutoAdjustRef.current = true;
+    previousSymmetryRef.current = snapshot.designIntent.layout.symmetry;
+    previousHeightRef.current = structuredClone(snapshot.designIntent.height);
+    previousDensityRef.current = structuredClone(snapshot.designIntent.density);
+    designIntentRef.current = snapshot.designIntent;
+    setGarden(structuredClone(snapshot.garden));
+    setDesignIntent(structuredClone(snapshot.designIntent));
+    setDesignIntentSummary(snapshot.designIntentSummary);
+    setDesignIntentChanges([...snapshot.designIntentChanges]);
+    setSelectedCell(snapshot.selectedCell ? { ...snapshot.selectedCell } : null);
+    setEditMode(snapshot.editMode);
+    setFrontViewMode(snapshot.frontViewMode);
+    setFrontViewPreviewImage("");
+    setFrontViewPreviewError("");
+    setColorPruneQueue([]);
+    setLastDensityBand(null);
+  }
+
+  function restorePreviousStep() {
+    const stack = undoStackRef.current;
+    const snapshot = stack[stack.length - 1];
+    if (!snapshot) return;
+    redoStackRef.current = [...redoStackRef.current, buildUndoSnapshot()].slice(-30);
+    undoStackRef.current = stack.slice(0, -1);
+    applySnapshot(snapshot);
+    setUndoDepth(undoStackRef.current.length);
+    setRedoDepth(redoStackRef.current.length);
+  }
+
+  function redoPreviousStep() {
+    const stack = redoStackRef.current;
+    const snapshot = stack[stack.length - 1];
+    if (!snapshot) return;
+    undoStackRef.current = [...undoStackRef.current, buildUndoSnapshot()].slice(-30);
+    redoStackRef.current = stack.slice(0, -1);
+    applySnapshot(snapshot);
+    setUndoDepth(undoStackRef.current.length);
+    setRedoDepth(redoStackRef.current.length);
+  }
+
+  function resolveHistoryCommand(message: string): "undo" | "redo" | null {
+    const normalized = message.trim().toLowerCase();
+    const compact = normalized.replace(/\s+/g, "");
+    const undoCommands = new Set([
+      "退回上一步",
+      "回退上一步",
+      "撤回上一步",
+      "回到上一步",
+      "撤销上一步",
+      "undo",
+    ]);
+    const redoCommands = new Set([
+      "重做",
+      "恢复上一步",
+      "恢复刚才撤回",
+      "redo",
+    ]);
+    if (undoCommands.has(compact)) return "undo";
+    if (redoCommands.has(compact)) return "redo";
+    return null;
+  }
+
+  function resolvePlantEditCommand(message: string) {
+    const trimmed = message.trim();
+    const normalized = trimmed.toLowerCase();
+    const removePatterns = [
+      /^(不要|去掉|删掉|删除|移除)(.+)$/,
+      /^把(.+?)(去掉|删掉|删除|移除)$/,
+      /^不要再用(.+)$/,
+    ];
+    const reducePatterns = [
+      /^(减少|少一点|降低)(.+)$/,
+      /^把(.+?)(减少一些|减少一点|少一点|降低一些|降低一点)$/,
+      /^(.+?)(少一点|减少一些|减少一点)$/,
+    ];
+    let rawQuery = "";
+    let action: "remove" | "reduce" | null = null;
+    for (const pattern of removePatterns) {
+      const match = trimmed.match(pattern);
+      if (!match) continue;
+      rawQuery = (match[2] ?? match[1] ?? "").trim();
+      action = "remove";
+      break;
+    }
+    if (!rawQuery) {
+      for (const pattern of reducePatterns) {
+        const match = trimmed.match(pattern);
+        if (!match) continue;
+        rawQuery = (match[2] ?? match[1] ?? "").trim();
+        action = "reduce";
+        break;
+      }
+    }
+    if (!rawQuery && !normalized.startsWith("no ")) return null;
+    if (!rawQuery && normalized.startsWith("no ")) {
+      rawQuery = trimmed.slice(3).trim();
+      action = "remove";
+    }
+    rawQuery = rawQuery.replace(/植物|这种|这些|这个|那种|那类/g, "").trim();
+    if (!rawQuery) return null;
+
+    const queries = rawQuery
+      .split(/(?:和|以及|及|,|，|\/|、|\+|还有)/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const matchedIds = new Set<string>();
+    const matchedLabels = new Set<string>();
+    const matchedQueries: string[] = [];
+
+    for (const queryText of queries) {
+      const query = queryText.toLowerCase();
+      const matchedVariants = allVariants.filter((variant) => {
+        const haystacks = [
+          variant.id,
+          variant.name,
+          variant.categoryId ?? "",
+          variant.categoryName ?? "",
+          ...(variant.tags ?? []),
+        ]
+          .map((value) => value.trim().toLowerCase())
+          .filter(Boolean);
+        return haystacks.some((value) => value.includes(query) || query.includes(value));
+      });
+      if (matchedVariants.length === 0) continue;
+      matchedQueries.push(queryText);
+      for (const variant of matchedVariants) {
+        matchedIds.add(variant.id);
+        matchedLabels.add(variant.categoryName || variant.name);
+      }
+    }
+    if (matchedIds.size === 0 || !action) return null;
+
+    return {
+      action,
+      query: matchedQueries.join("、") || rawQuery,
+      matchedIds,
+      matchedLabels: Array.from(matchedLabels),
+    };
+  }
+
+  function resolveAutoGenerateCommand(message: string) {
+    const compact = message.trim().toLowerCase().replace(/\s+/g, "");
+    const commands = new Set([
+      "生成花园",
+      "自动生成花园",
+      "生成布局",
+      "自动生成布局",
+      "重新生成花园",
+      "重新生成布局",
+      "generate garden",
+      "generate layout",
+      "auto generate",
+      "autogenerate",
+    ]);
+    return commands.has(compact);
+  }
+
+  function resolvePlantPreferenceCommand(message: string) {
+    const trimmed = message.trim();
+    const shouldGenerate = /生成|花园|布局|重新生成|重新排|为主/.test(trimmed);
+    const patterns = [
+      /^(?:生成(?:一个)?|做一个)?(.+?)为主的?(?:花园|布局)?$/,
+      /^多一点(.+)$/,
+      /^增加(.+?)(?:的)?权重$/,
+      /^提高(.+?)(?:的)?权重$/,
+      /^以(.+)为主$/,
+    ];
+    let rawQuery = "";
+    for (const pattern of patterns) {
+      const match = trimmed.match(pattern);
+      if (!match) continue;
+      rawQuery = (match[1] ?? "").trim();
+      break;
+    }
+    if (!rawQuery) return null;
+    rawQuery = rawQuery.replace(/植物|这种|这些|这个|那种|那类/g, "").trim();
+    if (!rawQuery) return null;
+
+    const queries = rawQuery
+      .split(/(?:和|以及|及|,|，|\/|、|\+|还有)/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const matchedIds = new Set<string>();
+    const matchedLabels = new Set<string>();
+
+    for (const queryText of queries) {
+      const query = queryText.toLowerCase();
+      const matchedVariants = allVariants.filter((variant) => {
+        const haystacks = [
+          variant.id,
+          variant.name,
+          variant.categoryId ?? "",
+          variant.categoryName ?? "",
+          ...(variant.tags ?? []),
+        ]
+          .map((value) => value.trim().toLowerCase())
+          .filter(Boolean);
+        return haystacks.some((value) => value.includes(query) || query.includes(value));
+      });
+      if (matchedVariants.length === 0) continue;
+      for (const variant of matchedVariants) {
+        matchedIds.add(variant.id);
+        if (variant.categoryId) matchedIds.add(variant.categoryId);
+        matchedLabels.add(variant.categoryName || variant.name);
+      }
+    }
+    if (matchedIds.size === 0) return null;
+
+    return {
+      query: rawQuery,
+      matchedIds: Array.from(matchedIds),
+      matchedLabels: Array.from(matchedLabels),
+      shouldGenerate,
+    };
+  }
+
+  function removePlantsByIds(state: GardenState, plantIds: Set<string>, mode: "remove" | "reduce") {
+    const next = structuredClone(state);
+    const matchedCells = next.cells.filter((cell) => plantIds.has(cell.plant));
+    if (matchedCells.length === 0) {
+      return { next, removedCount: 0 };
+    }
+    const removalTarget = mode === "remove" ? matchedCells.length : Math.max(1, Math.ceil(matchedCells.length * 0.5));
+    const removalKeys = new Set(
+      matchedCells
+        .slice()
+        .sort((a, b) => (b.row - a.row) || (b.col - a.col))
+        .slice(0, removalTarget)
+        .map((cell) => `${cell.row},${cell.col}`)
+    );
+    let removedCount = 0;
+    next.cells = next.cells.map((cell) => {
+      if (!removalKeys.has(`${cell.row},${cell.col}`)) return cell;
+      removedCount += 1;
+      return { ...cell, plant: "empty" };
+    });
+    return { next, removedCount };
+  }
 
   function getCell(next: GardenState, r: number, c: number) {
     return next.cells.find((x) => x.row === r && x.col === c) ?? null;
@@ -512,6 +853,8 @@ export default function App() {
       return;
     }
 
+    captureUndoSnapshot();
+
     if (resolved?.anchor && resolved.anchor.plant !== "empty") {
       for (const cell of footprintCells({ r: resolved.anchor.row, c: resolved.anchor.col }, resolved.footprint)) {
         const current = getCell(next, cell.r, cell.c);
@@ -550,6 +893,7 @@ export default function App() {
   }
 
   function applySize() {
+    captureUndoSnapshot();
     setGarden((prev) => ({
       ...resizeGarden(prev, rowsInput, colsInput),
       zone: Math.max(1, Math.min(13, Math.floor(zoneInput) || 1)),
@@ -560,6 +904,7 @@ export default function App() {
 
   async function autoGenerate() {
     if (isGeneratingLayout) return;
+    captureUndoSnapshot();
     setIsGeneratingLayout(true);
     setExportProgressText("正在准备自动生成布局...");
     setExportProgressValue(15);
@@ -585,6 +930,7 @@ export default function App() {
   }
 
   function clearAllPlants() {
+    captureUndoSnapshot();
     setGarden((prev) => ({
       ...prev,
       cells: prev.cells.map((cell) => ({ ...cell, plant: "empty" })),
@@ -601,6 +947,89 @@ export default function App() {
   async function applyAiDesignIntent() {
     const message = designIntentMessage.trim();
     if (!message || isApplyingAiIntent) return;
+    const plantPreferenceCommand = resolvePlantPreferenceCommand(message);
+    if (plantPreferenceCommand) {
+      captureUndoSnapshot();
+      const nextDesignIntent = applyDesignIntentPatch(designIntent, {
+        plant: {
+          preferences: Object.fromEntries(plantPreferenceCommand.matchedIds.map((id) => [id, 1])),
+        },
+      });
+      setDesignIntent(nextDesignIntent);
+      setDesignIntentSummary(
+        plantPreferenceCommand.shouldGenerate
+          ? `已提高 ${plantPreferenceCommand.query} 的生成权重，并按当前参数重新生成花园。`
+          : `已提高 ${plantPreferenceCommand.query} 的生成权重。`
+      );
+      setDesignIntentChanges(summarizeDesignIntentChanges(designIntent, nextDesignIntent));
+      if (plantPreferenceCommand.shouldGenerate) {
+        setGarden((prev) =>
+          generateAutoLayout(prev, allVariants, {
+            designIntent: nextDesignIntent,
+          })
+        );
+        setEditMode(false);
+        setSelectedCell(null);
+      }
+      return;
+    }
+    if (resolveAutoGenerateCommand(message)) {
+      await autoGenerate();
+      setDesignIntentSummary("已按当前参数自动生成花园布局。");
+      setDesignIntentChanges([]);
+      return;
+    }
+    const historyCommand = resolveHistoryCommand(message);
+    if (historyCommand === "undo") {
+      if (canUndo) {
+        restorePreviousStep();
+        setDesignIntentSummary("已退回上一步。");
+        setDesignIntentChanges([]);
+      } else {
+        setDesignIntentSummary("当前没有可退回的步骤。");
+        setDesignIntentChanges([]);
+      }
+      return;
+    }
+    if (historyCommand === "redo") {
+      if (canRedo) {
+        redoPreviousStep();
+        setDesignIntentSummary("已重做上一步。");
+        setDesignIntentChanges([]);
+      } else {
+        setDesignIntentSummary("当前没有可重做的步骤。");
+        setDesignIntentChanges([]);
+      }
+      return;
+    }
+    const plantEditCommand = resolvePlantEditCommand(message);
+    if (plantEditCommand) {
+      captureUndoSnapshot();
+      const { next, removedCount } = removePlantsByIds(
+        garden,
+        plantEditCommand.matchedIds,
+        plantEditCommand.action
+      );
+      setGarden(next);
+      setDesignIntentSummary(
+        removedCount > 0
+          ? plantEditCommand.action === "remove"
+            ? `已从当前布局中去除 ${plantEditCommand.query}，共移除 ${removedCount} 株。`
+            : `已减少 ${plantEditCommand.query}，共移除 ${removedCount} 株。`
+          : `当前布局里没有 ${plantEditCommand.query}。`
+      );
+      setDesignIntentChanges(
+        removedCount > 0
+          ? [
+              `${plantEditCommand.action === "remove" ? "removePlant" : "reducePlant"}: ${plantEditCommand.matchedLabels.join(
+                " / "
+              )} (${removedCount})`,
+            ]
+          : []
+      );
+      return;
+    }
+    captureUndoSnapshot();
     setIsApplyingAiIntent(true);
     try {
       const result = await requestDesignIntentPatch({
@@ -609,8 +1038,19 @@ export default function App() {
         zone: garden.zone,
         availableColors,
       });
-      setDesignIntent((prev) => applyDesignIntentPatch(prev, result.patch));
+      const loweredColors = Object.entries(result.patch?.color?.preferences ?? {})
+        .filter(([color, nextValue]) => {
+          const currentValue = designIntent.color.preferences[color] ?? 0;
+          return typeof nextValue === "number" && nextValue < currentValue;
+        })
+        .map(([color]) => color);
+      if (loweredColors.length > 0) {
+        setColorPruneQueue((prev) => [...prev, ...loweredColors]);
+      }
+      const nextDesignIntent = applyDesignIntentPatch(designIntent, result.patch);
+      setDesignIntent(nextDesignIntent);
       setDesignIntentSummary(result.summary || "");
+      setDesignIntentChanges(summarizeDesignIntentChanges(designIntent, nextDesignIntent));
     } catch (error) {
       const messageText = error instanceof Error ? error.message : String(error);
       alert(`AI 建议应用失败：${messageText}`);
@@ -919,6 +1359,7 @@ export default function App() {
     try {
       const text = await file.text();
       const { garden: next, warnings } = parseLayoutText(text, allVariants, garden.season, garden.zone);
+      captureUndoSnapshot();
       setGarden(next);
       setEditMode(false);
       setSelectedCell(null);
@@ -933,12 +1374,31 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!selectedCell) return;
-      if (event.key !== "Delete" && event.key !== "Backspace") return;
-
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName;
       const isEditable = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+      const isUndo = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z";
+      const isRedo =
+        ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "z") ||
+        (event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === "y");
+
+      if (isRedo) {
+        if (isEditable) return;
+        if (!canRedo) return;
+        event.preventDefault();
+        redoPreviousStep();
+        return;
+      }
+      if (isUndo) {
+        if (isEditable) return;
+        if (!canUndo) return;
+        event.preventDefault();
+        restorePreviousStep();
+        return;
+      }
+
+      if (!selectedCell) return;
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
       if (isEditable) return;
 
       event.preventDefault();
@@ -947,9 +1407,10 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedCell, garden, allVariants]);
+  }, [canRedo, canUndo, selectedCell, garden, allVariants]);
 
   useEffect(() => {
+    if (skipAutoAdjustRef.current) return;
     setGarden((prev) =>
       prunePlantsByHeightRange(
         prev,
@@ -959,13 +1420,43 @@ export default function App() {
     );
   }, [
     allVariants,
-    designIntent.layout.frontMin,
-    designIntent.layout.backMin,
-    designIntent.layout.frontMax,
-    designIntent.layout.backMax,
+    designIntent.height.frontMin,
+    designIntent.height.backMin,
+    designIntent.height.frontMax,
+    designIntent.height.backMax,
   ]);
 
   useEffect(() => {
+    if (skipAutoAdjustRef.current) return;
+    const previousHeight = previousHeightRef.current;
+    const nextHeight = designIntent.height;
+    previousHeightRef.current = structuredClone(nextHeight);
+    if (allVariants.length === 0) return;
+    const heightRaised =
+      nextHeight.frontMin > previousHeight.frontMin ||
+      nextHeight.backMin > previousHeight.backMin ||
+      nextHeight.frontMax > previousHeight.frontMax ||
+      nextHeight.backMax > previousHeight.backMax;
+    if (!heightRaised) return;
+    setGarden((prev) =>
+      generateAutoLayout(
+        prunePlantsByHeightRange(prev, allVariants, designIntentRef.current),
+        allVariants,
+        {
+          designIntent: designIntentRef.current,
+        }
+      )
+    );
+  }, [
+    allVariants,
+    designIntent.height.frontMin,
+    designIntent.height.backMin,
+    designIntent.height.frontMax,
+    designIntent.height.backMax,
+  ]);
+
+  useEffect(() => {
+    if (skipAutoAdjustRef.current) return;
     setGarden((prev) =>
       prunePlantsByDensityTargets(
         prev,
@@ -983,14 +1474,42 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!lastColorPruneKey) return;
+    if (skipAutoAdjustRef.current) return;
+    const previousDensity = previousDensityRef.current;
+    const nextDensity = designIntent.density;
+    previousDensityRef.current = structuredClone(nextDensity);
+    if (allVariants.length === 0) return;
+    if (
+      nextDensity.front <= previousDensity.front &&
+      nextDensity.middle <= previousDensity.middle &&
+      nextDensity.back <= previousDensity.back
+    ) {
+      return;
+    }
     setGarden((prev) =>
-      prunePlantsByColorPreferences(prev, allVariants, designIntent, lastColorPruneKey)
+      generateAutoLayout(prev, allVariants, {
+        designIntent: designIntentRef.current,
+      })
     );
-    setLastColorPruneKey(null);
-  }, [allVariants, designIntent.color.preferences, lastColorPruneKey]);
+  }, [
+    allVariants,
+    designIntent.density.front,
+    designIntent.density.middle,
+    designIntent.density.back,
+  ]);
 
   useEffect(() => {
+    if (skipAutoAdjustRef.current) return;
+    if (colorPruneQueue.length === 0) return;
+    const [nextColor, ...rest] = colorPruneQueue;
+    setGarden((prev) =>
+      prunePlantsByColorPreferences(prev, allVariants, designIntent, nextColor)
+    );
+    setColorPruneQueue(rest);
+  }, [allVariants, colorPruneQueue, designIntent]);
+
+  useEffect(() => {
+    if (skipAutoAdjustRef.current) return;
     const previousSymmetry = previousSymmetryRef.current;
     const nextSymmetry = designIntent.layout.symmetry;
     previousSymmetryRef.current = nextSymmetry;
@@ -1000,8 +1519,14 @@ export default function App() {
   }, [allVariants, designIntent.layout.symmetry]);
 
   useEffect(() => {
+    if (skipAutoAdjustRef.current) return;
     setGarden((prev) => prunePlantsByZone(prev, allVariants));
   }, [allVariants, garden.zone]);
+
+  useEffect(() => {
+    if (!skipAutoAdjustRef.current) return;
+    skipAutoAdjustRef.current = false;
+  }, [garden, designIntent]);
 
   useEffect(() => {
     try {
@@ -1167,7 +1692,10 @@ export default function App() {
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <select
               value={garden.season}
-              onChange={(e) => setGarden((g) => ({ ...g, season: e.target.value as Season }))}
+              onChange={(e) => {
+                captureUndoSnapshot();
+                setGarden((g) => ({ ...g, season: e.target.value as Season }));
+              }}
               style={{ height: 30 }}
             >
               <option value="spring">spring</option>
@@ -1393,6 +1921,44 @@ export default function App() {
                   : "效果预览是静态图，不可编辑；切回编辑模式后可继续摆放和删除植物。"}
               </div>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={restorePreviousStep}
+                  disabled={!canUndo}
+                  title={canUndo ? `恢复到上一步布局与参数（剩余 ${undoDepth} 步，Ctrl/Cmd + Z）` : "当前没有可撤回的更改"}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: "1px solid #cdbdb3",
+                    background: canUndo ? "#f6f1e8" : "#f2ede7",
+                    color: canUndo ? "#5e4c3c" : "#9b9185",
+                    whiteSpace: "nowrap",
+                    cursor: canUndo ? "pointer" : "not-allowed",
+                  }}
+                >
+                  退回上一步
+                </button>
+                <button
+                  type="button"
+                  onClick={redoPreviousStep}
+                  disabled={!canRedo}
+                  title={
+                    canRedo
+                      ? `恢复刚才撤回的步骤（剩余 ${redoDepth} 步，Ctrl+Y / Cmd/Ctrl + Shift + Z）`
+                      : "当前没有可重做的更改"
+                  }
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: "1px solid #cdbdb3",
+                    background: canRedo ? "#f6f1e8" : "#f2ede7",
+                    color: canRedo ? "#5e4c3c" : "#9b9185",
+                    whiteSpace: "nowrap",
+                    cursor: canRedo ? "pointer" : "not-allowed",
+                  }}
+                >
+                  重做
+                </button>
                 <button
                   type="button"
                   onClick={() => choosePlant(null)}
@@ -1735,6 +2301,12 @@ export default function App() {
                   <textarea
                     value={designIntentMessage}
                     onChange={(event) => setDesignIntentMessage(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" || event.shiftKey) return;
+                      event.preventDefault();
+                      if (!designIntentMessage.trim() || isApplyingAiIntent) return;
+                      void applyAiDesignIntent();
+                    }}
                     placeholder="例如：后排高一些，多一点白花，整体更对称。"
                     rows={3}
                     style={{
@@ -1776,6 +2348,26 @@ export default function App() {
                       {designIntentSummary}
                     </div>
                   ) : null}
+                  {designIntentChanges.length > 0 ? (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        fontSize: 12,
+                        color: "#4f5f4f",
+                        background: "#f8fbf5",
+                        border: "1px solid #d7e2d1",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, marginBottom: 6 }}>本次改动</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {designIntentChanges.map((change) => (
+                          <div key={change}>{change}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                   <button
@@ -1814,6 +2406,7 @@ export default function App() {
                     step={1}
                     leftValue={designIntent.height.frontMin}
                     rightValue={designIntent.height.backMin}
+                    onInteractionStart={captureUndoSnapshot}
                     onLeftChange={(value) =>
                       setDesignIntent((prev) => ({
                         ...prev,
@@ -1839,6 +2432,7 @@ export default function App() {
                     step={1}
                     leftValue={designIntent.height.frontMax}
                     rightValue={designIntent.height.backMax}
+                    onInteractionStart={captureUndoSnapshot}
                     onLeftChange={(value) =>
                       setDesignIntent((prev) => ({
                         ...prev,
@@ -1864,6 +2458,7 @@ export default function App() {
                     max={1}
                     step={0.01}
                     value={designIntent.height.gradientStrength}
+                    onPointerDown={captureUndoSnapshot}
                     onChange={(e) =>
                       setDesignIntent((prev) => ({
                         ...prev,
@@ -1883,6 +2478,7 @@ export default function App() {
                     max={1}
                     step={0.01}
                     value={designIntent.layout.symmetry}
+                    onPointerDown={captureUndoSnapshot}
                     onChange={(e) =>
                       setDesignIntent((prev) => ({
                         ...prev,
@@ -1902,6 +2498,7 @@ export default function App() {
                     max={1}
                     step={0.01}
                     value={designIntent.layout.clusteriness}
+                    onPointerDown={captureUndoSnapshot}
                     onChange={(e) =>
                       setDesignIntent((prev) => ({
                         ...prev,
@@ -1925,11 +2522,14 @@ export default function App() {
                       max={1}
                       step={0.01}
                       value={selectedColorPreference ? designIntent.color.preferences[selectedColorPreference] ?? 0 : 0}
+                      onPointerDown={captureUndoSnapshot}
                       onChange={(e) => {
                         if (!selectedColorPreference) return;
                         const nextValue = Number(e.target.value);
                         const currentValue = designIntent.color.preferences[selectedColorPreference] ?? 0;
-                        setLastColorPruneKey(nextValue < currentValue ? selectedColorPreference : null);
+                        if (nextValue < currentValue) {
+                          setColorPruneQueue((prev) => [...prev, selectedColorPreference]);
+                        }
                         setDesignIntent((prev) => ({
                           ...prev,
                           color: {
@@ -1960,6 +2560,7 @@ export default function App() {
                     max={1}
                     step={0.01}
                     value={designIntent.density.front}
+                    onPointerDown={captureUndoSnapshot}
                     onChange={(e) => {
                       setLastDensityBand("front");
                       setDesignIntent((prev) => ({
@@ -1980,6 +2581,7 @@ export default function App() {
                     max={1}
                     step={0.01}
                     value={designIntent.density.middle}
+                    onPointerDown={captureUndoSnapshot}
                     onChange={(e) => {
                       setLastDensityBand("middle");
                       setDesignIntent((prev) => ({
@@ -2000,6 +2602,7 @@ export default function App() {
                     max={1}
                     step={0.01}
                     value={designIntent.density.back}
+                    onPointerDown={captureUndoSnapshot}
                     onChange={(e) => {
                       setLastDensityBand("back");
                       setDesignIntent((prev) => ({

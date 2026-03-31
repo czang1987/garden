@@ -184,6 +184,21 @@ function colorBiasFactor(candidate: PlantVariant, preferences: Record<string, nu
   return colorBiasForName(candidate.color, preferences);
 }
 
+function plantBiasFactor(candidate: PlantVariant, preferences: Record<string, number>) {
+  const keys = [candidate.id, candidate.categoryId ?? ""].map((value) => value.trim()).filter(Boolean);
+  let preference = 0;
+  for (const key of keys) {
+    const value = Math.max(-1, Math.min(1, preferences[key] ?? 0));
+    if (Math.abs(value) > Math.abs(preference)) {
+      preference = value;
+    }
+  }
+  if (preference <= -1) return 0;
+  if (preference === 0) return 1;
+  if (preference > 0) return 1 + preference * 1.6;
+  return Math.max(0.05, 1 + preference * 0.95);
+}
+
 function symmetryPositionFactor(
   candidateRow: number,
   candidateCol: number,
@@ -806,6 +821,7 @@ function pickWeighted(
   symmetryStrength: number,
   clusteriness: number,
   colorPreferences: Record<string, number>,
+  plantPreferences: Record<string, number>,
   occupiedByBand: BandCounts,
   totalByBand: BandCounts,
   targetByBand: BandCounts,
@@ -845,6 +861,7 @@ function pickWeighted(
       clusteriness
     );
     const colorFactor = colorBiasFactor(v, colorPreferences);
+    const plantFactor = plantBiasFactor(v, plantPreferences);
     const mirrorFactor = symmetryFactor(v, candidateRow, candidateCol, cols, rows, placed, symmetryStrength,variantMap);
     const base = 1 + ((i % 5) * 0.03);
     return {
@@ -854,6 +871,7 @@ function pickWeighted(
       placementFactor,
       clusterinessFactor,
       colorFactor,
+      plantFactor,
       mirrorFactor,
       weight:
         base *
@@ -863,6 +881,7 @@ function pickWeighted(
         bandDensityFactor *
         clusterinessFactor *
         colorFactor *
+        plantFactor *
         mirrorFactor,
     };
   });
@@ -880,6 +899,7 @@ function pickWeighted(
         placementFactor: Number(chosen.placementFactor.toFixed(4)),
         clusterinessFactor: Number(chosen.clusterinessFactor.toFixed(4)),
         colorFactor: Number(chosen.colorFactor.toFixed(4)),
+        plantFactor: Number(chosen.plantFactor.toFixed(4)),
         mirrorFactor: Number(chosen.mirrorFactor.toFixed(4)),
         weight: Number(chosen.weight.toFixed(4)),
       });
@@ -894,6 +914,7 @@ function pickWeighted(
     placementFactor: Number(fallback.placementFactor.toFixed(4)),
     clusterinessFactor: Number(fallback.clusterinessFactor.toFixed(4)),
     colorFactor: Number(fallback.colorFactor.toFixed(4)),
+    plantFactor: Number(fallback.plantFactor.toFixed(4)),
     mirrorFactor: Number(fallback.mirrorFactor.toFixed(4)),
     weight: Number(fallback.weight.toFixed(4)),
     fallback: true,
@@ -919,6 +940,7 @@ export function generateAutoLayout(
   const symmetryStrength = designIntent?.layout.symmetry ?? 0;
   const clusteriness = designIntent?.layout.clusteriness ?? 0.35;
   const colorPreferences = designIntent?.color.preferences ?? {};
+  const plantPreferences = designIntent?.plant.preferences ?? {};
   const targetByBand: BandCounts = {
     front: clamp01(designIntent?.density.front ?? 0.62),
     middle: clamp01(designIntent?.density.middle ?? 0.62),
@@ -1013,6 +1035,7 @@ export function generateAutoLayout(
       symmetryStrength,
       clusteriness,
       colorPreferences,
+      plantPreferences,
       occupiedByBand,
       totalByBand,
       targetByBand,

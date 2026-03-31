@@ -18,6 +18,9 @@ export type DesignIntent = {
   color: {
     preferences: Record<string, number>;
   };
+  plant: {
+    preferences: Record<string, number>;
+  };
 };
 
 export type DesignIntentPatch = {
@@ -25,6 +28,9 @@ export type DesignIntentPatch = {
   density?: Partial<DesignIntent["density"]>;
   layout?: Partial<DesignIntent["layout"]>;
   color?: {
+    preferences?: Record<string, number>;
+  };
+  plant?: {
     preferences?: Record<string, number>;
   };
 };
@@ -42,6 +48,12 @@ export function applyDesignIntentPatch(current: DesignIntent, patch: DesignInten
       preferences: {
         ...current.color.preferences,
         ...(patch.color?.preferences ?? {}),
+      },
+    },
+    plant: {
+      preferences: {
+        ...current.plant.preferences,
+        ...(patch.plant?.preferences ?? {}),
       },
     },
   };
@@ -66,6 +78,13 @@ export function applyDesignIntentPatch(current: DesignIntent, patch: DesignInten
   }
   next.color.preferences = sanitizedColorPreferences;
 
+  const sanitizedPlantPreferences: Record<string, number> = {};
+  for (const [key, value] of Object.entries(next.plant.preferences)) {
+    if (!Number.isFinite(value)) continue;
+    sanitizedPlantPreferences[key] = clamp(value, -1, 1);
+  }
+  next.plant.preferences = sanitizedPlantPreferences;
+
   return next;
 }
 
@@ -87,6 +106,9 @@ export const DEFAULT_DESIGN_INTENT: DesignIntent = {
     clusteriness: 0.35,
   },
   color: {
+    preferences: {},
+  },
+  plant: {
     preferences: {},
   },
 };
