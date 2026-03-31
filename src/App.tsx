@@ -293,6 +293,7 @@ export default function App() {
   const [designIntentMessage, setDesignIntentMessage] = useState("");
   const [designIntentSummary, setDesignIntentSummary] = useState("");
   const [designIntentChanges, setDesignIntentChanges] = useState<string[]>([]);
+  const [showAutoGenerateControls, setShowAutoGenerateControls] = useState(false);
   const [isApplyingAiIntent, setIsApplyingAiIntent] = useState(false);
   const previousSymmetryRef = useRef(designIntent.layout.symmetry);
   const previousHeightRef = useRef(structuredClone(designIntent.height));
@@ -402,6 +403,11 @@ export default function App() {
           ...variant,
           categoryId: cat.id,
           categoryName: cat.name,
+          boundary:
+            variant.boundary ??
+            (/\bboxwood\b/i.test(variant.id) ||
+              /\bboxwood\b/i.test(cat.id) ||
+              /\bboxwood\b/i.test(variant.name)),
         }))
       );
     }
@@ -519,6 +525,72 @@ export default function App() {
         `plant.${key}`,
         current.plant.preferences[key] ?? 0,
         next.plant.preferences[key] ?? 0
+      );
+    }
+
+    const edgePlantKeys = Array.from(
+      new Set([...Object.keys(current.plant.edgePreferences), ...Object.keys(next.plant.edgePreferences)])
+    ).sort();
+    for (const key of edgePlantKeys) {
+      pushChange(
+        `plant.edge.${key}`,
+        current.plant.edgePreferences[key] ?? 0,
+        next.plant.edgePreferences[key] ?? 0
+      );
+    }
+
+    const centerPlantKeys = Array.from(
+      new Set([...Object.keys(current.plant.centerPreferences), ...Object.keys(next.plant.centerPreferences)])
+    ).sort();
+    for (const key of centerPlantKeys) {
+      pushChange(
+        `plant.center.${key}`,
+        current.plant.centerPreferences[key] ?? 0,
+        next.plant.centerPreferences[key] ?? 0
+      );
+    }
+
+    const cornerPlantKeys = Array.from(
+      new Set([...Object.keys(current.plant.cornerPreferences), ...Object.keys(next.plant.cornerPreferences)])
+    ).sort();
+    for (const key of cornerPlantKeys) {
+      pushChange(
+        `plant.corner.${key}`,
+        current.plant.cornerPreferences[key] ?? 0,
+        next.plant.cornerPreferences[key] ?? 0
+      );
+    }
+
+    const frontPlantKeys = Array.from(
+      new Set([...Object.keys(current.plant.frontPreferences), ...Object.keys(next.plant.frontPreferences)])
+    ).sort();
+    for (const key of frontPlantKeys) {
+      pushChange(
+        `plant.front.${key}`,
+        current.plant.frontPreferences[key] ?? 0,
+        next.plant.frontPreferences[key] ?? 0
+      );
+    }
+
+    const middlePlantKeys = Array.from(
+      new Set([...Object.keys(current.plant.middlePreferences), ...Object.keys(next.plant.middlePreferences)])
+    ).sort();
+    for (const key of middlePlantKeys) {
+      pushChange(
+        `plant.middle.${key}`,
+        current.plant.middlePreferences[key] ?? 0,
+        next.plant.middlePreferences[key] ?? 0
+      );
+    }
+
+    const backPlantKeys = Array.from(
+      new Set([...Object.keys(current.plant.backPreferences), ...Object.keys(next.plant.backPreferences)])
+    ).sort();
+    for (const key of backPlantKeys) {
+      pushChange(
+        `plant.back.${key}`,
+        current.plant.backPreferences[key] ?? 0,
+        next.plant.backPreferences[key] ?? 0
       );
     }
 
@@ -752,6 +824,349 @@ export default function App() {
     };
   }
 
+  function resolveEdgePlantPreferenceCommand(message: string) {
+    const trimmed = message.trim();
+    const shouldGenerate = true;
+    const positivePatterns = [
+      { pattern: /^边缘多放些(.+)$/, mode: "increase" as const },
+      { pattern: /^边缘多一点(.+)$/, mode: "increase" as const },
+      { pattern: /^边缘放(.+)$/, mode: "replace" as const },
+      { pattern: /^边缘种(.+)$/, mode: "replace" as const },
+      { pattern: /^边缘用(.+)$/, mode: "replace" as const },
+      { pattern: /^边缘换成(.+)$/, mode: "replace" as const },
+      { pattern: /^让边缘多一些(.+)$/, mode: "increase" as const },
+      { pattern: /^让(.+)更靠边$/, mode: "increase" as const },
+    ];
+    const negativePatterns = [
+      /^边缘不要(.+)$/,
+      /^边缘别放(.+)$/,
+      /^边缘减少(.+)$/,
+      /^边缘少一点(.+)$/,
+      /^让边缘少一些(.+)$/,
+    ];
+    let rawQuery = "";
+    let action: "increase" | "decrease" | "replace" | null = null;
+    for (const { pattern, mode } of positivePatterns) {
+      const match = trimmed.match(pattern);
+      if (!match) continue;
+      rawQuery = (match[1] ?? "").trim();
+      action = mode;
+      break;
+    }
+    if (!rawQuery) {
+      for (const pattern of negativePatterns) {
+        const match = trimmed.match(pattern);
+        if (!match) continue;
+        rawQuery = (match[1] ?? "").trim();
+        action = "decrease";
+        break;
+      }
+    }
+    rawQuery = rawQuery.replace(/植物|这种|这些|这个|那种|那类/g, "").trim();
+    if (!rawQuery || !action) return null;
+
+    const queries = rawQuery
+      .split(/(?:和|以及|及|,|，|\/|、|\+|还有)/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const matchedIds = new Set<string>();
+    const matchedLabels = new Set<string>();
+
+    for (const queryText of queries) {
+      const query = queryText.toLowerCase();
+      const matchedVariants = allVariants.filter((variant) => {
+        const haystacks = [
+          variant.id,
+          variant.name,
+          variant.categoryId ?? "",
+          variant.categoryName ?? "",
+          ...(variant.tags ?? []),
+        ]
+          .map((value) => value.trim().toLowerCase())
+          .filter(Boolean);
+        return haystacks.some((value) => value.includes(query) || query.includes(value));
+      });
+      if (matchedVariants.length === 0) continue;
+      for (const variant of matchedVariants) {
+        matchedIds.add(variant.id);
+        if (variant.categoryId) matchedIds.add(variant.categoryId);
+        matchedLabels.add(variant.categoryName || variant.name);
+      }
+    }
+    if (matchedIds.size === 0) return null;
+
+    return {
+      action,
+      query: rawQuery,
+      matchedIds: Array.from(matchedIds),
+      matchedLabels: Array.from(matchedLabels),
+      shouldGenerate,
+    };
+  }
+
+  function resolveCenterPlantPreferenceCommand(message: string) {
+    const trimmed = message.trim();
+    const shouldGenerate = true;
+    const positivePatterns = [
+      { pattern: /^中间多放些(.+)$/, mode: "increase" as const },
+      { pattern: /^中间多一点(.+)$/, mode: "increase" as const },
+      { pattern: /^中间放(.+)$/, mode: "replace" as const },
+      { pattern: /^中间种(.+)$/, mode: "replace" as const },
+      { pattern: /^中间用(.+)$/, mode: "replace" as const },
+      { pattern: /^中间换成(.+)$/, mode: "replace" as const },
+      { pattern: /^让中间多一些(.+)$/, mode: "increase" as const },
+      { pattern: /^让(.+)更靠中间$/, mode: "increase" as const },
+      { pattern: /^让(.+)更居中$/, mode: "increase" as const },
+      { pattern: /^中央多放些(.+)$/, mode: "increase" as const },
+      { pattern: /^中央放(.+)$/, mode: "replace" as const },
+      { pattern: /^中心多放些(.+)$/, mode: "increase" as const },
+      { pattern: /^中心放(.+)$/, mode: "replace" as const },
+    ];
+    const negativePatterns = [
+      /^中间不要(.+)$/,
+      /^中间别放(.+)$/,
+      /^中间减少(.+)$/,
+      /^中间少一点(.+)$/,
+      /^让中间少一些(.+)$/,
+      /^中央不要(.+)$/,
+      /^中心不要(.+)$/,
+    ];
+    let rawQuery = "";
+    let action: "increase" | "decrease" | "replace" | null = null;
+    for (const { pattern, mode } of positivePatterns) {
+      const match = trimmed.match(pattern);
+      if (!match) continue;
+      rawQuery = (match[1] ?? "").trim();
+      action = mode;
+      break;
+    }
+    if (!rawQuery) {
+      for (const pattern of negativePatterns) {
+        const match = trimmed.match(pattern);
+        if (!match) continue;
+        rawQuery = (match[1] ?? "").trim();
+        action = "decrease";
+        break;
+      }
+    }
+    rawQuery = rawQuery.replace(/植物|这种|这些|这个|那种|那类/g, "").trim();
+    if (!rawQuery || !action) return null;
+
+    const queries = rawQuery
+      .split(/(?:和|以及|及|,|，|\/|、|\+|还有)/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const matchedIds = new Set<string>();
+    const matchedLabels = new Set<string>();
+    for (const queryText of queries) {
+      const query = queryText.toLowerCase();
+      const matchedVariants = allVariants.filter((variant) => {
+        const haystacks = [variant.id, variant.name, variant.categoryId ?? "", variant.categoryName ?? "", ...(variant.tags ?? [])]
+          .map((value) => value.trim().toLowerCase())
+          .filter(Boolean);
+        return haystacks.some((value) => value.includes(query) || query.includes(value));
+      });
+      if (matchedVariants.length === 0) continue;
+      for (const variant of matchedVariants) {
+        matchedIds.add(variant.id);
+        if (variant.categoryId) matchedIds.add(variant.categoryId);
+        matchedLabels.add(variant.categoryName || variant.name);
+      }
+    }
+    if (matchedIds.size === 0) return null;
+    return {
+      action,
+      query: rawQuery,
+      matchedIds: Array.from(matchedIds),
+      matchedLabels: Array.from(matchedLabels),
+      shouldGenerate,
+    };
+  }
+
+  function resolveCornerPlantPreferenceCommand(message: string) {
+    const trimmed = message.trim();
+    const shouldGenerate = true;
+    const positivePatterns = [
+      { pattern: /^角落多放些(.+)$/, mode: "increase" as const },
+      { pattern: /^角落多一点(.+)$/, mode: "increase" as const },
+      { pattern: /^角落放(.+)$/, mode: "replace" as const },
+      { pattern: /^角落种(.+)$/, mode: "replace" as const },
+      { pattern: /^角落用(.+)$/, mode: "replace" as const },
+      { pattern: /^角落换成(.+)$/, mode: "replace" as const },
+      { pattern: /^让角落多一些(.+)$/, mode: "increase" as const },
+      { pattern: /^让(.+)更靠角落$/, mode: "increase" as const },
+      { pattern: /^四角多放些(.+)$/, mode: "increase" as const },
+      { pattern: /^四角放(.+)$/, mode: "replace" as const },
+    ];
+    const negativePatterns = [
+      /^角落不要(.+)$/,
+      /^角落别放(.+)$/,
+      /^角落减少(.+)$/,
+      /^角落少一点(.+)$/,
+      /^让角落少一些(.+)$/,
+      /^四角不要(.+)$/,
+    ];
+    let rawQuery = "";
+    let action: "increase" | "decrease" | "replace" | null = null;
+    for (const { pattern, mode } of positivePatterns) {
+      const match = trimmed.match(pattern);
+      if (!match) continue;
+      rawQuery = (match[1] ?? "").trim();
+      action = mode;
+      break;
+    }
+    if (!rawQuery) {
+      for (const pattern of negativePatterns) {
+        const match = trimmed.match(pattern);
+        if (!match) continue;
+        rawQuery = (match[1] ?? "").trim();
+        action = "decrease";
+        break;
+      }
+    }
+    rawQuery = rawQuery.replace(/植物|这种|这些|这个|那种|那类/g, "").trim();
+    if (!rawQuery || !action) return null;
+
+    const queries = rawQuery
+      .split(/(?:和|以及|及|,|，|\/|、|\+|还有)/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const matchedIds = new Set<string>();
+    const matchedLabels = new Set<string>();
+    for (const queryText of queries) {
+      const query = queryText.toLowerCase();
+      const matchedVariants = allVariants.filter((variant) => {
+        const haystacks = [variant.id, variant.name, variant.categoryId ?? "", variant.categoryName ?? "", ...(variant.tags ?? [])]
+          .map((value) => value.trim().toLowerCase())
+          .filter(Boolean);
+        return haystacks.some((value) => value.includes(query) || query.includes(value));
+      });
+      if (matchedVariants.length === 0) continue;
+      for (const variant of matchedVariants) {
+        matchedIds.add(variant.id);
+        if (variant.categoryId) matchedIds.add(variant.categoryId);
+        matchedLabels.add(variant.categoryName || variant.name);
+      }
+    }
+    if (matchedIds.size === 0) return null;
+    return {
+      action,
+      query: rawQuery,
+      matchedIds: Array.from(matchedIds),
+      matchedLabels: Array.from(matchedLabels),
+      shouldGenerate,
+    };
+  }
+
+  function resolveBandPlantPreferenceCommand(message: string) {
+    const trimmed = message.trim();
+    const shouldGenerate = true;
+    const patterns = [
+      {
+        band: "front" as const,
+        positive: [
+          { pattern: /^前排多放些(.+)$/, mode: "increase" as const },
+          { pattern: /^前排多一点(.+)$/, mode: "increase" as const },
+          { pattern: /^前排放(.+)$/, mode: "replace" as const },
+          { pattern: /^前排种(.+)$/, mode: "replace" as const },
+          { pattern: /^前排用(.+)$/, mode: "replace" as const },
+          { pattern: /^前排换成(.+)$/, mode: "replace" as const },
+          { pattern: /^让前排多一些(.+)$/, mode: "increase" as const },
+          { pattern: /^前面多放些(.+)$/, mode: "increase" as const },
+          { pattern: /^前面放(.+)$/, mode: "replace" as const },
+          { pattern: /^前面用(.+)$/, mode: "replace" as const },
+          { pattern: /^前面换成(.+)$/, mode: "replace" as const },
+          { pattern: /^让(.+)更靠前$/, mode: "increase" as const },
+        ],
+        negative: [/^前排不要放(.+)$/, /^前排不要(.+)$/, /^前排别放(.+)$/, /^前排减少(.+)$/, /^前排少一点(.+)$/, /^前面不要(.+)$/],
+      },
+      {
+        band: "middle" as const,
+        positive: [
+          { pattern: /^中排多放些(.+)$/, mode: "increase" as const },
+          { pattern: /^中排多一点(.+)$/, mode: "increase" as const },
+          { pattern: /^中排放(.+)$/, mode: "replace" as const },
+          { pattern: /^中排种(.+)$/, mode: "replace" as const },
+          { pattern: /^中排用(.+)$/, mode: "replace" as const },
+          { pattern: /^中排换成(.+)$/, mode: "replace" as const },
+          { pattern: /^让中排多一些(.+)$/, mode: "increase" as const },
+        ],
+        negative: [/^中排不要放(.+)$/, /^中排不要(.+)$/, /^中排别放(.+)$/, /^中排减少(.+)$/, /^中排少一点(.+)$/],
+      },
+      {
+        band: "back" as const,
+        positive: [
+          { pattern: /^后排多放些(.+)$/, mode: "increase" as const },
+          { pattern: /^后排多一点(.+)$/, mode: "increase" as const },
+          { pattern: /^后排放(.+)$/, mode: "replace" as const },
+          { pattern: /^后排种(.+)$/, mode: "replace" as const },
+          { pattern: /^后排用(.+)$/, mode: "replace" as const },
+          { pattern: /^后排换成(.+)$/, mode: "replace" as const },
+          { pattern: /^让后排多一些(.+)$/, mode: "increase" as const },
+          { pattern: /^后面多放些(.+)$/, mode: "increase" as const },
+          { pattern: /^后面放(.+)$/, mode: "replace" as const },
+          { pattern: /^后面用(.+)$/, mode: "replace" as const },
+          { pattern: /^后面换成(.+)$/, mode: "replace" as const },
+          { pattern: /^让(.+)更靠后$/, mode: "increase" as const },
+        ],
+        negative: [/^后排不要放(.+)$/, /^后排不要(.+)$/, /^后排别放(.+)$/, /^后排减少(.+)$/, /^后排少一点(.+)$/, /^后面不要(.+)$/],
+      },
+    ];
+    for (const { band, positive, negative } of patterns) {
+      let rawQuery = "";
+      let action: "increase" | "decrease" | "replace" | null = null;
+      for (const { pattern, mode } of positive) {
+        const match = trimmed.match(pattern);
+        if (!match) continue;
+        rawQuery = (match[1] ?? "").trim();
+        action = mode;
+        break;
+      }
+      if (!rawQuery) {
+        for (const pattern of negative) {
+          const match = trimmed.match(pattern);
+          if (!match) continue;
+          rawQuery = (match[1] ?? "").trim();
+          action = "decrease";
+          break;
+        }
+      }
+      rawQuery = rawQuery.replace(/植物|这种|这些|这个|那种|那类/g, "").trim();
+      if (!rawQuery || !action) continue;
+      const queries = rawQuery
+        .split(/(?:和|以及|及|,|，|\/|、|\+|还有)/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const matchedIds = new Set<string>();
+      const matchedLabels = new Set<string>();
+      for (const queryText of queries) {
+        const query = queryText.toLowerCase();
+        const matchedVariants = allVariants.filter((variant) => {
+          const haystacks = [variant.id, variant.name, variant.categoryId ?? "", variant.categoryName ?? "", ...(variant.tags ?? [])]
+            .map((value) => value.trim().toLowerCase())
+            .filter(Boolean);
+          return haystacks.some((value) => value.includes(query) || query.includes(value));
+        });
+        if (matchedVariants.length === 0) continue;
+        for (const variant of matchedVariants) {
+          matchedIds.add(variant.id);
+          if (variant.categoryId) matchedIds.add(variant.categoryId);
+          matchedLabels.add(variant.categoryName || variant.name);
+        }
+      }
+      if (matchedIds.size === 0) continue;
+      return {
+        band,
+        action,
+        query: rawQuery,
+        matchedIds: Array.from(matchedIds),
+        matchedLabels: Array.from(matchedLabels),
+        shouldGenerate,
+      };
+    }
+    return null;
+  }
+
   function removePlantsByIds(state: GardenState, plantIds: Set<string>, mode: "remove" | "reduce") {
     const next = structuredClone(state);
     const matchedCells = next.cells.filter((cell) => plantIds.has(cell.plant));
@@ -773,6 +1188,423 @@ export default function App() {
       return { ...cell, plant: "empty" };
     });
     return { next, removedCount };
+  }
+
+  function removeEdgePlantsByIds(state: GardenState, plantIds: Set<string>, mode: "remove" | "reduce") {
+    const next = structuredClone(state);
+    const maxEdgeDistance = Math.max(1, Math.floor(Math.min(next.rows, next.cols) * 0.25));
+    const matchedCells = next.cells.filter((cell) => {
+      if (!plantIds.has(cell.plant)) return false;
+      const edgeDistance = Math.min(cell.row, cell.col, next.rows - 1 - cell.row, next.cols - 1 - cell.col);
+      return edgeDistance <= maxEdgeDistance;
+    });
+    if (matchedCells.length === 0) {
+      return { next, removedCount: 0 };
+    }
+    const removalTarget = mode === "remove" ? matchedCells.length : Math.max(1, Math.ceil(matchedCells.length * 0.5));
+    const removalKeys = new Set(
+      matchedCells
+        .slice()
+        .sort((a, b) => (a.row - b.row) || (a.col - b.col))
+        .slice(0, removalTarget)
+        .map((cell) => `${cell.row},${cell.col}`)
+    );
+    let removedCount = 0;
+    next.cells = next.cells.map((cell) => {
+      if (!removalKeys.has(`${cell.row},${cell.col}`)) return cell;
+      removedCount += 1;
+      return { ...cell, plant: "empty" };
+    });
+    return { next, removedCount };
+  }
+
+  function removeCenterPlantsByIds(state: GardenState, plantIds: Set<string>, mode: "remove" | "reduce") {
+    const next = structuredClone(state);
+    const rowCenter = next.rows <= 1 ? 0 : (next.rows - 1) / 2;
+    const colCenter = next.cols <= 1 ? 0 : (next.cols - 1) / 2;
+    const matchedCells = next.cells.filter((cell) => {
+      if (!plantIds.has(cell.plant)) return false;
+      const rowDistance = Math.abs(cell.row - rowCenter) / Math.max(1, rowCenter);
+      const colDistance = Math.abs(cell.col - colCenter) / Math.max(1, colCenter);
+      return (rowDistance + colDistance) / 2 <= 0.4;
+    });
+    if (matchedCells.length === 0) return { next, removedCount: 0 };
+    const removalTarget = mode === "remove" ? matchedCells.length : Math.max(1, Math.ceil(matchedCells.length * 0.5));
+    const removalKeys = new Set(
+      matchedCells
+        .slice()
+        .sort((a, b) => Math.abs(a.row - rowCenter) + Math.abs(a.col - colCenter) - (Math.abs(b.row - rowCenter) + Math.abs(b.col - colCenter)))
+        .slice(0, removalTarget)
+        .map((cell) => `${cell.row},${cell.col}`)
+    );
+    let removedCount = 0;
+    next.cells = next.cells.map((cell) => {
+      if (!removalKeys.has(`${cell.row},${cell.col}`)) return cell;
+      removedCount += 1;
+      return { ...cell, plant: "empty" };
+    });
+    return { next, removedCount };
+  }
+
+  function removeCornerPlantsByIds(state: GardenState, plantIds: Set<string>, mode: "remove" | "reduce") {
+    const next = structuredClone(state);
+    const maxCornerDistance = Math.max(1, Math.floor(Math.min(next.rows, next.cols) * 0.22));
+    const matchedCells = next.cells.filter((cell) => {
+      if (!plantIds.has(cell.plant)) return false;
+      const nearestCorner = Math.min(
+        Math.hypot(cell.row, cell.col),
+        Math.hypot(cell.row, next.cols - 1 - cell.col),
+        Math.hypot(next.rows - 1 - cell.row, cell.col),
+        Math.hypot(next.rows - 1 - cell.row, next.cols - 1 - cell.col)
+      );
+      return nearestCorner <= maxCornerDistance;
+    });
+    if (matchedCells.length === 0) return { next, removedCount: 0 };
+    const removalTarget = mode === "remove" ? matchedCells.length : Math.max(1, Math.ceil(matchedCells.length * 0.5));
+    const removalKeys = new Set(
+      matchedCells
+        .slice()
+        .sort((a, b) => a.row + a.col - (b.row + b.col))
+        .slice(0, removalTarget)
+        .map((cell) => `${cell.row},${cell.col}`)
+    );
+    let removedCount = 0;
+    next.cells = next.cells.map((cell) => {
+      if (!removalKeys.has(`${cell.row},${cell.col}`)) return cell;
+      removedCount += 1;
+      return { ...cell, plant: "empty" };
+    });
+    return { next, removedCount };
+  }
+
+  function bandForRow(row: number, rows: number): "front" | "middle" | "back" {
+    if (rows <= 1) return "front";
+    const t = Math.max(0, Math.min(1, row / (rows - 1)));
+    if (t < 1 / 3) return "back";
+    if (t < 2 / 3) return "middle";
+    return "front";
+  }
+
+  function removeBandPlantsByIds(
+    state: GardenState,
+    band: "front" | "middle" | "back",
+    plantIds: Set<string>,
+    mode: "remove" | "reduce"
+  ) {
+    const next = structuredClone(state);
+    const matchedCells = next.cells.filter((cell) => plantIds.has(cell.plant) && bandForRow(cell.row, next.rows) === band);
+    if (matchedCells.length === 0) return { next, removedCount: 0 };
+    const removalTarget = mode === "remove" ? matchedCells.length : Math.max(1, Math.ceil(matchedCells.length * 0.5));
+    const removalKeys = new Set(
+      matchedCells
+        .slice()
+        .sort((a, b) => (band === "back" ? a.row - b.row : b.row - a.row) || (a.col - b.col))
+        .slice(0, removalTarget)
+        .map((cell) => `${cell.row},${cell.col}`)
+    );
+    let removedCount = 0;
+    next.cells = next.cells.map((cell) => {
+      if (!removalKeys.has(`${cell.row},${cell.col}`)) return cell;
+      removedCount += 1;
+      return { ...cell, plant: "empty" };
+    });
+    return { next, removedCount };
+  }
+
+  function clearBandForReplacement(state: GardenState, band: "front" | "middle" | "back", keepIds: Set<string>) {
+    const next = structuredClone(state);
+    let removedCount = 0;
+    next.cells = next.cells.map((cell) => {
+      if (!cell.plant || cell.plant === "empty") return cell;
+      if (bandForRow(cell.row, next.rows) !== band) return cell;
+      if (keepIds.has(cell.plant)) return cell;
+      removedCount += 1;
+      return { ...cell, plant: "empty" };
+    });
+    return { next, removedCount };
+  }
+
+  function clearEdgeForReplacement(state: GardenState, keepIds: Set<string>) {
+    const next = structuredClone(state);
+    const maxEdgeDistance = Math.max(1, Math.floor(Math.min(next.rows, next.cols) * 0.25));
+    let removedCount = 0;
+    next.cells = next.cells.map((cell) => {
+      if (!cell.plant || cell.plant === "empty") return cell;
+      const edgeDistance = Math.min(cell.row, cell.col, next.rows - 1 - cell.row, next.cols - 1 - cell.col);
+      if (edgeDistance > maxEdgeDistance || keepIds.has(cell.plant)) return cell;
+      removedCount += 1;
+      return { ...cell, plant: "empty" };
+    });
+    return { next, removedCount };
+  }
+
+  function clearCenterForReplacement(state: GardenState, keepIds: Set<string>) {
+    const next = structuredClone(state);
+    const rowCenter = next.rows <= 1 ? 0 : (next.rows - 1) / 2;
+    const colCenter = next.cols <= 1 ? 0 : (next.cols - 1) / 2;
+    let removedCount = 0;
+    next.cells = next.cells.map((cell) => {
+      if (!cell.plant || cell.plant === "empty") return cell;
+      const rowDistance = Math.abs(cell.row - rowCenter) / Math.max(1, rowCenter);
+      const colDistance = Math.abs(cell.col - colCenter) / Math.max(1, colCenter);
+      if ((rowDistance + colDistance) / 2 > 0.4 || keepIds.has(cell.plant)) return cell;
+      removedCount += 1;
+      return { ...cell, plant: "empty" };
+    });
+    return { next, removedCount };
+  }
+
+  function clearCornerForReplacement(state: GardenState, keepIds: Set<string>) {
+    const next = structuredClone(state);
+    const maxCornerDistance = Math.max(1, Math.floor(Math.min(next.rows, next.cols) * 0.22));
+    let removedCount = 0;
+    next.cells = next.cells.map((cell) => {
+      if (!cell.plant || cell.plant === "empty") return cell;
+      const nearestCorner = Math.min(
+        Math.hypot(cell.row, cell.col),
+        Math.hypot(cell.row, next.cols - 1 - cell.col),
+        Math.hypot(next.rows - 1 - cell.row, cell.col),
+        Math.hypot(next.rows - 1 - cell.row, next.cols - 1 - cell.col)
+      );
+      if (nearestCorner > maxCornerDistance || keepIds.has(cell.plant)) return cell;
+      removedCount += 1;
+      return { ...cell, plant: "empty" };
+    });
+    return { next, removedCount };
+  }
+
+  function applyLocalDesignCommandClause(
+    clause: string,
+    currentGarden: GardenState,
+    currentDesignIntent: DesignIntent
+  ) {
+    const bandPlantPreferenceCommand = resolveBandPlantPreferenceCommand(clause);
+    if (bandPlantPreferenceCommand) {
+      const preferenceKey =
+        bandPlantPreferenceCommand.band === "front"
+          ? "frontPreferences"
+          : bandPlantPreferenceCommand.band === "middle"
+            ? "middlePreferences"
+            : "backPreferences";
+      const nextDesignIntent = applyDesignIntentPatch(currentDesignIntent, {
+        plant: {
+          [preferenceKey]: Object.fromEntries(
+            bandPlantPreferenceCommand.matchedIds.map((id) => [id, bandPlantPreferenceCommand.action === "increase" ? 1 : -1])
+          ),
+        },
+      });
+      let workingGarden = currentGarden;
+      let removedCount = 0;
+      if (bandPlantPreferenceCommand.action === "decrease") {
+        const removal = removeBandPlantsByIds(
+          workingGarden,
+          bandPlantPreferenceCommand.band,
+          new Set(bandPlantPreferenceCommand.matchedIds),
+          "remove"
+        );
+        workingGarden = removal.next;
+        removedCount = removal.removedCount;
+      } else if (bandPlantPreferenceCommand.action === "replace") {
+        const replacement = clearBandForReplacement(
+          workingGarden,
+          bandPlantPreferenceCommand.band,
+          new Set(bandPlantPreferenceCommand.matchedIds)
+        );
+        workingGarden = replacement.next;
+        removedCount = replacement.removedCount;
+      }
+      const nextGarden = bandPlantPreferenceCommand.shouldGenerate
+        ? generateAutoLayout(workingGarden, allVariants, { designIntent: nextDesignIntent })
+        : bandPlantPreferenceCommand.action === "decrease"
+          ? workingGarden
+          : currentGarden;
+      const bandLabel =
+        bandPlantPreferenceCommand.band === "front"
+          ? "前排"
+          : bandPlantPreferenceCommand.band === "middle"
+            ? "中排"
+            : "后排";
+      return {
+        handled: true,
+        garden: nextGarden,
+        designIntent: nextDesignIntent,
+        summary:
+          bandPlantPreferenceCommand.action === "increase"
+            ? `已提高 ${bandPlantPreferenceCommand.query} 在${bandLabel}的生成权重，并重新生成布局。`
+            : bandPlantPreferenceCommand.action === "replace"
+              ? `已将${bandLabel}尽量替换为 ${bandPlantPreferenceCommand.query}，并重新生成布局。`
+            : removedCount > 0
+              ? `已减少${bandLabel}的 ${bandPlantPreferenceCommand.query}，并按新的${bandLabel}偏好重新生成布局。`
+              : `已设置${bandLabel}不要 ${bandPlantPreferenceCommand.query}，并按新的${bandLabel}偏好重新生成布局。`,
+      };
+    }
+
+    const centerPlantPreferenceCommand = resolveCenterPlantPreferenceCommand(clause);
+    if (centerPlantPreferenceCommand) {
+      const nextDesignIntent = applyDesignIntentPatch(currentDesignIntent, {
+        plant: {
+          centerPreferences: Object.fromEntries(
+            centerPlantPreferenceCommand.matchedIds.map((id) => [id, centerPlantPreferenceCommand.action === "increase" ? 1 : -1])
+          ),
+        },
+      });
+      let workingGarden = currentGarden;
+      let removedCount = 0;
+      if (centerPlantPreferenceCommand.action === "decrease") {
+        const removal = removeCenterPlantsByIds(workingGarden, new Set(centerPlantPreferenceCommand.matchedIds), "remove");
+        workingGarden = removal.next;
+        removedCount = removal.removedCount;
+      } else if (centerPlantPreferenceCommand.action === "replace") {
+        const replacement = clearCenterForReplacement(workingGarden, new Set(centerPlantPreferenceCommand.matchedIds));
+        workingGarden = replacement.next;
+        removedCount = replacement.removedCount;
+      }
+      const nextGarden = centerPlantPreferenceCommand.shouldGenerate
+        ? generateAutoLayout(workingGarden, allVariants, { designIntent: nextDesignIntent })
+        : centerPlantPreferenceCommand.action === "decrease"
+          ? workingGarden
+          : currentGarden;
+      return {
+        handled: true,
+        garden: nextGarden,
+        designIntent: nextDesignIntent,
+        summary:
+          centerPlantPreferenceCommand.action === "increase"
+            ? `已提高 ${centerPlantPreferenceCommand.query} 在中间区域的生成权重，并重新生成布局。`
+            : centerPlantPreferenceCommand.action === "replace"
+              ? `已将中间区域尽量替换为 ${centerPlantPreferenceCommand.query}，并重新生成布局。`
+            : removedCount > 0
+              ? `已减少中间区域的 ${centerPlantPreferenceCommand.query}，并按新的中间偏好重新生成布局。`
+              : `已设置中间不要 ${centerPlantPreferenceCommand.query}，并按新的中间偏好重新生成布局。`,
+      };
+    }
+
+    const cornerPlantPreferenceCommand = resolveCornerPlantPreferenceCommand(clause);
+    if (cornerPlantPreferenceCommand) {
+      const nextDesignIntent = applyDesignIntentPatch(currentDesignIntent, {
+        plant: {
+          cornerPreferences: Object.fromEntries(
+            cornerPlantPreferenceCommand.matchedIds.map((id) => [id, cornerPlantPreferenceCommand.action === "increase" ? 1 : -1])
+          ),
+        },
+      });
+      let workingGarden = currentGarden;
+      let removedCount = 0;
+      if (cornerPlantPreferenceCommand.action === "decrease") {
+        const removal = removeCornerPlantsByIds(workingGarden, new Set(cornerPlantPreferenceCommand.matchedIds), "remove");
+        workingGarden = removal.next;
+        removedCount = removal.removedCount;
+      } else if (cornerPlantPreferenceCommand.action === "replace") {
+        const replacement = clearCornerForReplacement(workingGarden, new Set(cornerPlantPreferenceCommand.matchedIds));
+        workingGarden = replacement.next;
+        removedCount = replacement.removedCount;
+      }
+      const nextGarden = cornerPlantPreferenceCommand.shouldGenerate
+        ? generateAutoLayout(workingGarden, allVariants, { designIntent: nextDesignIntent })
+        : cornerPlantPreferenceCommand.action === "decrease"
+          ? workingGarden
+          : currentGarden;
+      return {
+        handled: true,
+        garden: nextGarden,
+        designIntent: nextDesignIntent,
+        summary:
+          cornerPlantPreferenceCommand.action === "increase"
+            ? `已提高 ${cornerPlantPreferenceCommand.query} 在角落区域的生成权重，并重新生成布局。`
+            : cornerPlantPreferenceCommand.action === "replace"
+              ? `已将角落区域尽量替换为 ${cornerPlantPreferenceCommand.query}，并重新生成布局。`
+            : removedCount > 0
+              ? `已减少角落区域的 ${cornerPlantPreferenceCommand.query}，并按新的角落偏好重新生成布局。`
+              : `已设置角落不要 ${cornerPlantPreferenceCommand.query}，并按新的角落偏好重新生成布局。`,
+      };
+    }
+
+    const edgePlantPreferenceCommand = resolveEdgePlantPreferenceCommand(clause);
+    if (edgePlantPreferenceCommand) {
+      const nextDesignIntent = applyDesignIntentPatch(currentDesignIntent, {
+        plant: {
+          edgePreferences: Object.fromEntries(
+            edgePlantPreferenceCommand.matchedIds.map((id) => [id, edgePlantPreferenceCommand.action === "increase" ? 1 : -1])
+          ),
+        },
+      });
+      let workingGarden = currentGarden;
+      let removedCount = 0;
+      if (edgePlantPreferenceCommand.action === "decrease") {
+        const removal = removeEdgePlantsByIds(workingGarden, new Set(edgePlantPreferenceCommand.matchedIds), "remove");
+        workingGarden = removal.next;
+        removedCount = removal.removedCount;
+      } else if (edgePlantPreferenceCommand.action === "replace") {
+        const replacement = clearEdgeForReplacement(workingGarden, new Set(edgePlantPreferenceCommand.matchedIds));
+        workingGarden = replacement.next;
+        removedCount = replacement.removedCount;
+      }
+      const nextGarden = edgePlantPreferenceCommand.shouldGenerate
+        ? generateAutoLayout(workingGarden, allVariants, { designIntent: nextDesignIntent })
+        : edgePlantPreferenceCommand.action === "decrease"
+          ? workingGarden
+          : currentGarden;
+      return {
+        handled: true,
+        garden: nextGarden,
+        designIntent: nextDesignIntent,
+        summary:
+          edgePlantPreferenceCommand.action === "increase"
+            ? `已提高 ${edgePlantPreferenceCommand.query} 在边缘位置的生成权重，并重新生成布局。`
+            : edgePlantPreferenceCommand.action === "replace"
+              ? `已将边缘区域尽量替换为 ${edgePlantPreferenceCommand.query}，并重新生成布局。`
+            : removedCount > 0
+              ? `已减少边缘的 ${edgePlantPreferenceCommand.query}，并按新的边缘偏好重新生成布局。`
+              : `已设置边缘不要 ${edgePlantPreferenceCommand.query}，并按新的边缘偏好重新生成布局。`,
+      };
+    }
+
+    const plantPreferenceCommand = resolvePlantPreferenceCommand(clause);
+    if (plantPreferenceCommand) {
+      const nextDesignIntent = applyDesignIntentPatch(currentDesignIntent, {
+        plant: {
+          preferences: Object.fromEntries(plantPreferenceCommand.matchedIds.map((id) => [id, 1])),
+        },
+      });
+      const nextGarden = plantPreferenceCommand.shouldGenerate
+        ? generateAutoLayout(currentGarden, allVariants, { designIntent: nextDesignIntent })
+        : currentGarden;
+      return {
+        handled: true,
+        garden: nextGarden,
+        designIntent: nextDesignIntent,
+        summary: plantPreferenceCommand.shouldGenerate
+          ? `已提高 ${plantPreferenceCommand.query} 的生成权重，并按当前参数重新生成花园。`
+          : `已提高 ${plantPreferenceCommand.query} 的生成权重。`,
+      };
+    }
+
+    if (resolveAutoGenerateCommand(clause)) {
+      return {
+        handled: true,
+        garden: generateAutoLayout(currentGarden, allVariants, { designIntent: currentDesignIntent }),
+        designIntent: currentDesignIntent,
+        summary: "已按当前参数自动生成花园布局。",
+      };
+    }
+
+    const plantEditCommand = resolvePlantEditCommand(clause);
+    if (plantEditCommand) {
+      const { next, removedCount } = removePlantsByIds(currentGarden, plantEditCommand.matchedIds, plantEditCommand.action);
+      return {
+        handled: true,
+        garden: next,
+        designIntent: currentDesignIntent,
+        summary:
+          removedCount > 0
+            ? plantEditCommand.action === "remove"
+              ? `已从当前布局中去除 ${plantEditCommand.query}，共移除 ${removedCount} 株。`
+              : `已减少 ${plantEditCommand.query}，共移除 ${removedCount} 株。`
+            : `当前布局里没有 ${plantEditCommand.query}。`,
+      };
+    }
+
+    return { handled: false as const, garden: currentGarden, designIntent: currentDesignIntent, summary: "" };
   }
 
   function getCell(next: GardenState, r: number, c: number) {
@@ -947,6 +1779,223 @@ export default function App() {
   async function applyAiDesignIntent() {
     const message = designIntentMessage.trim();
     if (!message || isApplyingAiIntent) return;
+    setDesignIntentMessage("");
+    const clauses = message
+      .split(/[，,。；;]+/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (clauses.length > 1) {
+      let workingGarden = garden;
+      let workingDesignIntent = designIntent;
+      const summaries: string[] = [];
+      let allHandled = true;
+      for (const clause of clauses) {
+        const result = applyLocalDesignCommandClause(clause, workingGarden, workingDesignIntent);
+        if (!result.handled) {
+          allHandled = false;
+          break;
+        }
+        workingGarden = result.garden;
+        workingDesignIntent = result.designIntent;
+        if (result.summary) summaries.push(result.summary);
+      }
+      if (allHandled) {
+        captureUndoSnapshot();
+        setGarden(workingGarden);
+        setDesignIntent(workingDesignIntent);
+        setDesignIntentSummary(summaries.join("；"));
+        setDesignIntentChanges(summarizeDesignIntentChanges(designIntent, workingDesignIntent));
+        setEditMode(false);
+        setSelectedCell(null);
+        return;
+      }
+    }
+    const bandPlantPreferenceCommand = resolveBandPlantPreferenceCommand(message);
+    if (bandPlantPreferenceCommand) {
+      captureUndoSnapshot();
+      let workingGarden = garden;
+      const preferenceKey =
+        bandPlantPreferenceCommand.band === "front"
+          ? "frontPreferences"
+          : bandPlantPreferenceCommand.band === "middle"
+            ? "middlePreferences"
+            : "backPreferences";
+      const nextDesignIntent = applyDesignIntentPatch(designIntent, {
+        plant: {
+          [preferenceKey]: Object.fromEntries(
+            bandPlantPreferenceCommand.matchedIds.map((id) => [id, bandPlantPreferenceCommand.action === "increase" ? 1 : -1])
+          ),
+        },
+      });
+      let removedCount = 0;
+      if (bandPlantPreferenceCommand.action === "decrease") {
+        const removal = removeBandPlantsByIds(
+          workingGarden,
+          bandPlantPreferenceCommand.band,
+          new Set(bandPlantPreferenceCommand.matchedIds),
+          "remove"
+        );
+        workingGarden = removal.next;
+        removedCount = removal.removedCount;
+      }
+      setDesignIntent(nextDesignIntent);
+      setDesignIntentChanges(summarizeDesignIntentChanges(designIntent, nextDesignIntent));
+      if (bandPlantPreferenceCommand.shouldGenerate) {
+        setGarden(() =>
+          generateAutoLayout(workingGarden, allVariants, {
+            designIntent: nextDesignIntent,
+          })
+        );
+        setEditMode(false);
+        setSelectedCell(null);
+      } else if (bandPlantPreferenceCommand.action === "decrease") {
+        setGarden(workingGarden);
+      }
+      const bandLabel =
+        bandPlantPreferenceCommand.band === "front"
+          ? "前排"
+          : bandPlantPreferenceCommand.band === "middle"
+            ? "中排"
+            : "后排";
+      setDesignIntentSummary(
+        bandPlantPreferenceCommand.action === "increase"
+          ? `已提高 ${bandPlantPreferenceCommand.query} 在${bandLabel}的生成权重，并重新生成布局。`
+          : removedCount > 0
+            ? `已减少${bandLabel}的 ${bandPlantPreferenceCommand.query}，并按新的${bandLabel}偏好重新生成布局。`
+            : `已设置${bandLabel}不要 ${bandPlantPreferenceCommand.query}，并按新的${bandLabel}偏好重新生成布局。`
+      );
+      return;
+    }
+    const centerPlantPreferenceCommand = resolveCenterPlantPreferenceCommand(message);
+    if (centerPlantPreferenceCommand) {
+      captureUndoSnapshot();
+      let workingGarden = garden;
+      const nextDesignIntent = applyDesignIntentPatch(designIntent, {
+        plant: {
+          centerPreferences: Object.fromEntries(
+            centerPlantPreferenceCommand.matchedIds.map((id) => [
+              id,
+              centerPlantPreferenceCommand.action === "increase" ? 1 : -1,
+            ])
+          ),
+        },
+      });
+      let removedCount = 0;
+      if (centerPlantPreferenceCommand.action === "decrease") {
+        const removal = removeCenterPlantsByIds(workingGarden, new Set(centerPlantPreferenceCommand.matchedIds), "remove");
+        workingGarden = removal.next;
+        removedCount = removal.removedCount;
+      }
+      setDesignIntent(nextDesignIntent);
+      setDesignIntentChanges(summarizeDesignIntentChanges(designIntent, nextDesignIntent));
+      if (centerPlantPreferenceCommand.shouldGenerate) {
+        setGarden(() =>
+          generateAutoLayout(workingGarden, allVariants, {
+            designIntent: nextDesignIntent,
+          })
+        );
+        setEditMode(false);
+        setSelectedCell(null);
+      } else if (centerPlantPreferenceCommand.action === "decrease") {
+        setGarden(workingGarden);
+      }
+      setDesignIntentSummary(
+        centerPlantPreferenceCommand.action === "increase"
+          ? `已提高 ${centerPlantPreferenceCommand.query} 在中间区域的生成权重，并重新生成布局。`
+          : removedCount > 0
+            ? `已减少中间区域的 ${centerPlantPreferenceCommand.query}，并按新的中间偏好重新生成布局。`
+            : `已设置中间不要 ${centerPlantPreferenceCommand.query}，并按新的中间偏好重新生成布局。`
+      );
+      return;
+    }
+    const cornerPlantPreferenceCommand = resolveCornerPlantPreferenceCommand(message);
+    if (cornerPlantPreferenceCommand) {
+      captureUndoSnapshot();
+      let workingGarden = garden;
+      const nextDesignIntent = applyDesignIntentPatch(designIntent, {
+        plant: {
+          cornerPreferences: Object.fromEntries(
+            cornerPlantPreferenceCommand.matchedIds.map((id) => [
+              id,
+              cornerPlantPreferenceCommand.action === "increase" ? 1 : -1,
+            ])
+          ),
+        },
+      });
+      let removedCount = 0;
+      if (cornerPlantPreferenceCommand.action === "decrease") {
+        const removal = removeCornerPlantsByIds(workingGarden, new Set(cornerPlantPreferenceCommand.matchedIds), "remove");
+        workingGarden = removal.next;
+        removedCount = removal.removedCount;
+      }
+      setDesignIntent(nextDesignIntent);
+      setDesignIntentChanges(summarizeDesignIntentChanges(designIntent, nextDesignIntent));
+      if (cornerPlantPreferenceCommand.shouldGenerate) {
+        setGarden(() =>
+          generateAutoLayout(workingGarden, allVariants, {
+            designIntent: nextDesignIntent,
+          })
+        );
+        setEditMode(false);
+        setSelectedCell(null);
+      } else if (cornerPlantPreferenceCommand.action === "decrease") {
+        setGarden(workingGarden);
+      }
+      setDesignIntentSummary(
+        cornerPlantPreferenceCommand.action === "increase"
+          ? `已提高 ${cornerPlantPreferenceCommand.query} 在角落区域的生成权重，并重新生成布局。`
+          : removedCount > 0
+            ? `已减少角落区域的 ${cornerPlantPreferenceCommand.query}，并按新的角落偏好重新生成布局。`
+            : `已设置角落不要 ${cornerPlantPreferenceCommand.query}，并按新的角落偏好重新生成布局。`
+      );
+      return;
+    }
+    const edgePlantPreferenceCommand = resolveEdgePlantPreferenceCommand(message);
+    if (edgePlantPreferenceCommand) {
+      captureUndoSnapshot();
+      let workingGarden = garden;
+      const nextDesignIntent = applyDesignIntentPatch(designIntent, {
+        plant: {
+          edgePreferences: Object.fromEntries(
+            edgePlantPreferenceCommand.matchedIds.map((id) => [
+              id,
+              edgePlantPreferenceCommand.action === "increase" ? 1 : -1,
+            ])
+          ),
+        },
+      });
+      let removedCount = 0;
+      if (edgePlantPreferenceCommand.action === "decrease") {
+        const removal = removeEdgePlantsByIds(
+          workingGarden,
+          new Set(edgePlantPreferenceCommand.matchedIds),
+          "remove"
+        );
+        workingGarden = removal.next;
+        removedCount = removal.removedCount;
+      }
+      setDesignIntent(nextDesignIntent);
+      setDesignIntentChanges(summarizeDesignIntentChanges(designIntent, nextDesignIntent));
+      if (edgePlantPreferenceCommand.shouldGenerate) {
+        setGarden((prev) =>
+          generateAutoLayout(edgePlantPreferenceCommand.action === "decrease" ? workingGarden : prev, allVariants, {
+            designIntent: nextDesignIntent,
+          })
+        );
+        setEditMode(false);
+        setSelectedCell(null);
+      } else if (edgePlantPreferenceCommand.action === "decrease") {
+        setGarden(workingGarden);
+      }
+      setDesignIntentSummary(
+        edgePlantPreferenceCommand.action === "increase"
+          ? `已提高 ${edgePlantPreferenceCommand.query} 在边缘位置的生成权重，并重新生成布局。`
+          : removedCount > 0
+            ? `已减少边缘的 ${edgePlantPreferenceCommand.query}，并按新的边缘偏好重新生成布局。`
+            : `已设置边缘不要 ${edgePlantPreferenceCommand.query}，并按新的边缘偏好重新生成布局。`
+      );
+      return;
+    }
     const plantPreferenceCommand = resolvePlantPreferenceCommand(message);
     if (plantPreferenceCommand) {
       captureUndoSnapshot();
@@ -1689,46 +2738,6 @@ export default function App() {
             border: "1px solid #d7e2d1",
           }}
         >
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <select
-              value={garden.season}
-              onChange={(e) => {
-                captureUndoSnapshot();
-                setGarden((g) => ({ ...g, season: e.target.value as Season }));
-              }}
-              style={{ height: 30 }}
-            >
-              <option value="spring">spring</option>
-              <option value="summer">summer</option>
-              <option value="autumn">autumn</option>
-              <option value="winter">winter</option>
-            </select>
-            <select
-              value={frontViewExportStyle}
-              onChange={(e) => setFrontViewExportStyle(e.target.value as FrontViewExportStyle)}
-              style={{ height: 30 }}
-            >
-              <option value="download">原图</option>
-              <option value="monet">莫奈</option>
-              <option value="impressionist">印象派</option>
-              <option value="watercolor">水彩</option>
-              <option value="vangogh">梵高</option>
-              <option value="ukiyoe">浮世绘</option>
-              <option value="animebg">动画背景</option>
-              <option value="architectural">景观效果图</option>
-              <option value="botanical">植物学插画</option>
-              <option value="pastel">粉彩</option>
-            </select>
-          </div>
-          <button onClick={exportFrontViewPng} disabled={isStylizingFrontView}>
-            {isStylizingFrontView ? "正在生成风格图..." : "导出效果图"}
-          </button>
-          <button onClick={exportTrainingAssets} disabled={isExportingTrainingAssets || isExportingReport || isStylizingFrontView}>
-            {isExportingTrainingAssets ? "正在生成训练素材..." : "生成训练素材"}
-          </button>
-          <button onClick={exportDesignReport} disabled={isExportingReport}>
-            {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
-          </button>
         </div>
       </div>
 
@@ -2013,6 +3022,93 @@ export default function App() {
                 >
                   {isGeneratingFrontViewPreview ? "生成预览中..." : "效果预览"}
                 </button>
+                </div>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    flexWrap: "wrap",
+                    marginLeft: 6,
+                  }}
+                >
+                  <select
+                    value={garden.season}
+                    onChange={(e) => {
+                      captureUndoSnapshot();
+                      setGarden((g) => ({ ...g, season: e.target.value as Season }));
+                    }}
+                    style={{ height: 32 }}
+                  >
+                    <option value="spring">spring</option>
+                    <option value="summer">summer</option>
+                    <option value="autumn">autumn</option>
+                    <option value="winter">winter</option>
+                  </select>
+                  <select
+                    value={frontViewExportStyle}
+                    onChange={(e) => setFrontViewExportStyle(e.target.value as FrontViewExportStyle)}
+                    style={{ height: 32 }}
+                  >
+                    <option value="download">原图</option>
+                    <option value="monet">莫奈</option>
+                    <option value="impressionist">印象派</option>
+                    <option value="watercolor">水彩</option>
+                    <option value="vangogh">梵高</option>
+                    <option value="ukiyoe">浮世绘</option>
+                    <option value="animebg">动画背景</option>
+                    <option value="architectural">景观效果图</option>
+                    <option value="botanical">植物学插画</option>
+                    <option value="pastel">粉彩</option>
+                  </select>
+                  <button
+                    onClick={exportFrontViewPng}
+                    disabled={isStylizingFrontView}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 999,
+                      border: "1px solid #cdbdb3",
+                      background: isStylizingFrontView ? "#f2ede7" : "#f6f1e8",
+                      color: isStylizingFrontView ? "#9b9185" : "#5e4c3c",
+                      whiteSpace: "nowrap",
+                      cursor: isStylizingFrontView ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {isStylizingFrontView ? "正在生成风格图..." : "导出效果图"}
+                  </button>
+                  <button
+                    onClick={exportTrainingAssets}
+                    disabled={isExportingTrainingAssets || isExportingReport || isStylizingFrontView}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 999,
+                      border: "1px solid #cdbdb3",
+                      background:
+                        isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "#f2ede7" : "#f6f1e8",
+                      color:
+                        isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "#9b9185" : "#5e4c3c",
+                      whiteSpace: "nowrap",
+                      cursor:
+                        isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {isExportingTrainingAssets ? "正在生成训练素材..." : "生成训练素材"}
+                  </button>
+                  <button
+                    onClick={exportDesignReport}
+                    disabled={isExportingReport}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 999,
+                      border: "1px solid #cdbdb3",
+                      background: isExportingReport ? "#f2ede7" : "#f6f1e8",
+                      color: isExportingReport ? "#9b9185" : "#5e4c3c",
+                      whiteSpace: "nowrap",
+                      cursor: isExportingReport ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
+                  </button>
                 </div>
               </div>
             </div>
@@ -2396,222 +3492,257 @@ export default function App() {
                     清空
                   </button>
                 </div>
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                    Min Height: {designIntent.height.frontMin} - {designIntent.height.backMin}
-                  </div>
-                  <DualSlider
-                    min={0}
-                    max={120}
-                    step={1}
-                    leftValue={designIntent.height.frontMin}
-                    rightValue={designIntent.height.backMin}
-                    onInteractionStart={captureUndoSnapshot}
-                    onLeftChange={(value) =>
-                      setDesignIntent((prev) => ({
-                        ...prev,
-                        height: { ...prev.height, frontMin: value },
-                      }))
-                    }
-                    onRightChange={(value) =>
-                      setDesignIntent((prev) => ({
-                        ...prev,
-                        height: { ...prev.height, backMin: value },
-                      }))
-                    }
-                    width={catalogPaneWidth - 32}
-                  />
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                    Max Height: {designIntent.height.frontMax} - {designIntent.height.backMax}
-                  </div>
-                  <DualSlider
-                    min={0}
-                    max={160}
-                    step={1}
-                    leftValue={designIntent.height.frontMax}
-                    rightValue={designIntent.height.backMax}
-                    onInteractionStart={captureUndoSnapshot}
-                    onLeftChange={(value) =>
-                      setDesignIntent((prev) => ({
-                        ...prev,
-                        height: { ...prev.height, frontMax: Math.max(value, prev.height.frontMin) },
-                      }))
-                    }
-                    onRightChange={(value) =>
-                      setDesignIntent((prev) => ({
-                        ...prev,
-                        height: { ...prev.height, backMax: Math.max(value, prev.height.backMin) },
-                      }))
-                    }
-                    width={catalogPaneWidth - 32}
-                  />
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                    Height Gradient: {designIntent.height.gradientStrength.toFixed(2)}
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={designIntent.height.gradientStrength}
-                    onPointerDown={captureUndoSnapshot}
-                    onChange={(e) =>
-                      setDesignIntent((prev) => ({
-                        ...prev,
-                        height: { ...prev.height, gradientStrength: Number(e.target.value) },
-                      }))
-                    }
-                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
-                  />
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                    Symmetry: {designIntent.layout.symmetry.toFixed(2)}
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={designIntent.layout.symmetry}
-                    onPointerDown={captureUndoSnapshot}
-                    onChange={(e) =>
-                      setDesignIntent((prev) => ({
-                        ...prev,
-                        layout: { ...prev.layout, symmetry: Number(e.target.value) },
-                      }))
-                    }
-                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
-                  />
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                    Clusteriness: {designIntent.layout.clusteriness.toFixed(2)}
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={designIntent.layout.clusteriness}
-                    onPointerDown={captureUndoSnapshot}
-                    onChange={(e) =>
-                      setDesignIntent((prev) => ({
-                        ...prev,
-                        layout: { ...prev.layout, clusteriness: Number(e.target.value) },
-                      }))
-                    }
-                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
-                  />
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Color Preference</div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <ColorDotSelect
-                      value={selectedColorPreference}
-                      colors={availableColors}
-                      onChange={setSelectedColorPreference}
-                    />
-                    <input
-                      type="range"
-                      min={-1}
-                      max={1}
-                      step={0.01}
-                      value={selectedColorPreference ? designIntent.color.preferences[selectedColorPreference] ?? 0 : 0}
-                      onPointerDown={captureUndoSnapshot}
-                      onChange={(e) => {
-                        if (!selectedColorPreference) return;
-                        const nextValue = Number(e.target.value);
-                        const currentValue = designIntent.color.preferences[selectedColorPreference] ?? 0;
-                        if (nextValue < currentValue) {
-                          setColorPruneQueue((prev) => [...prev, selectedColorPreference]);
-                        }
-                        setDesignIntent((prev) => ({
-                          ...prev,
-                          color: {
-                            preferences: {
-                              ...prev.color.preferences,
-                              [selectedColorPreference]: nextValue,
-                            },
-                          },
-                        }));
-                      }}
-                      style={{ flex: "1 1 auto", minWidth: 0 }}
-                    />
-                    <span style={{ width: 36, textAlign: "right", fontSize: 12, color: "#666" }}>
-                      {(selectedColorPreference ? designIntent.color.preferences[selectedColorPreference] ?? 0 : 0).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-                <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: "#2f3d2f" }}>
-                  前中后排密度
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, marginBottom: 4 }}>
-                    Front Density: {densityStats.front.toFixed(2)} / {designIntent.density.front.toFixed(2)}
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={designIntent.density.front}
-                    onPointerDown={captureUndoSnapshot}
-                    onChange={(e) => {
-                      setLastDensityBand("front");
-                      setDesignIntent((prev) => ({
-                        ...prev,
-                        density: { ...prev.density, front: Number(e.target.value) },
-                      }));
+                <div
+                  style={{
+                    marginBottom: 14,
+                    border: "1px solid #e2ddd2",
+                    borderRadius: 12,
+                    background: "#fffdf8",
+                    overflow: "hidden",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowAutoGenerateControls((prev) => !prev)}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "10px 12px",
+                      border: "none",
+                      background: "transparent",
+                      color: "#5c665a",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      textAlign: "left",
                     }}
-                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
-                  />
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, marginBottom: 4 }}>
-                    Middle Density: {densityStats.middle.toFixed(2)} / {designIntent.density.middle.toFixed(2)}
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={designIntent.density.middle}
-                    onPointerDown={captureUndoSnapshot}
-                    onChange={(e) => {
-                      setLastDensityBand("middle");
-                      setDesignIntent((prev) => ({
-                        ...prev,
-                        density: { ...prev.density, middle: Number(e.target.value) },
-                      }));
-                    }}
-                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
-                  />
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 12, marginBottom: 4 }}>
-                    Back Density: {densityStats.back.toFixed(2)} / {designIntent.density.back.toFixed(2)}
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={designIntent.density.back}
-                    onPointerDown={captureUndoSnapshot}
-                    onChange={(e) => {
-                      setLastDensityBand("back");
-                      setDesignIntent((prev) => ({
-                        ...prev,
-                        density: { ...prev.density, back: Number(e.target.value) },
-                      }));
-                    }}
-                    style={{ width: Math.max(120, catalogPaneWidth - 32) }}
-                  />
+                  >
+                    <span>调整参数</span>
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>{showAutoGenerateControls ? "−" : "+"}</span>
+                  </button>
+                  {showAutoGenerateControls ? (
+                    <div style={{ padding: "0 12px 12px" }}>
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                          Min Height: {designIntent.height.frontMin} - {designIntent.height.backMin}
+                        </div>
+                        <DualSlider
+                          min={0}
+                          max={120}
+                          step={1}
+                          leftValue={designIntent.height.frontMin}
+                          rightValue={designIntent.height.backMin}
+                          onInteractionStart={captureUndoSnapshot}
+                          onLeftChange={(value) =>
+                            setDesignIntent((prev) => ({
+                              ...prev,
+                              height: { ...prev.height, frontMin: value },
+                            }))
+                          }
+                          onRightChange={(value) =>
+                            setDesignIntent((prev) => ({
+                              ...prev,
+                              height: { ...prev.height, backMin: value },
+                            }))
+                          }
+                          width={catalogPaneWidth - 56}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                          Max Height: {designIntent.height.frontMax} - {designIntent.height.backMax}
+                        </div>
+                        <DualSlider
+                          min={0}
+                          max={160}
+                          step={1}
+                          leftValue={designIntent.height.frontMax}
+                          rightValue={designIntent.height.backMax}
+                          onInteractionStart={captureUndoSnapshot}
+                          onLeftChange={(value) =>
+                            setDesignIntent((prev) => ({
+                              ...prev,
+                              height: { ...prev.height, frontMax: Math.max(value, prev.height.frontMin) },
+                            }))
+                          }
+                          onRightChange={(value) =>
+                            setDesignIntent((prev) => ({
+                              ...prev,
+                              height: { ...prev.height, backMax: Math.max(value, prev.height.backMin) },
+                            }))
+                          }
+                          width={catalogPaneWidth - 56}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                          Height Gradient: {designIntent.height.gradientStrength.toFixed(2)}
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={designIntent.height.gradientStrength}
+                          onPointerDown={captureUndoSnapshot}
+                          onChange={(e) =>
+                            setDesignIntent((prev) => ({
+                              ...prev,
+                              height: { ...prev.height, gradientStrength: Number(e.target.value) },
+                            }))
+                          }
+                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                          Symmetry: {designIntent.layout.symmetry.toFixed(2)}
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={designIntent.layout.symmetry}
+                          onPointerDown={captureUndoSnapshot}
+                          onChange={(e) =>
+                            setDesignIntent((prev) => ({
+                              ...prev,
+                              layout: { ...prev.layout, symmetry: Number(e.target.value) },
+                            }))
+                          }
+                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                          Clusteriness: {designIntent.layout.clusteriness.toFixed(2)}
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={designIntent.layout.clusteriness}
+                          onPointerDown={captureUndoSnapshot}
+                          onChange={(e) =>
+                            setDesignIntent((prev) => ({
+                              ...prev,
+                              layout: { ...prev.layout, clusteriness: Number(e.target.value) },
+                            }))
+                          }
+                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Color Preference</div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <ColorDotSelect
+                            value={selectedColorPreference}
+                            colors={availableColors}
+                            onChange={setSelectedColorPreference}
+                          />
+                          <input
+                            type="range"
+                            min={-1}
+                            max={1}
+                            step={0.01}
+                            value={selectedColorPreference ? designIntent.color.preferences[selectedColorPreference] ?? 0 : 0}
+                            onPointerDown={captureUndoSnapshot}
+                            onChange={(e) => {
+                              if (!selectedColorPreference) return;
+                              const nextValue = Number(e.target.value);
+                              const currentValue = designIntent.color.preferences[selectedColorPreference] ?? 0;
+                              if (nextValue < currentValue) {
+                                setColorPruneQueue((prev) => [...prev, selectedColorPreference]);
+                              }
+                              setDesignIntent((prev) => ({
+                                ...prev,
+                                color: {
+                                  preferences: {
+                                    ...prev.color.preferences,
+                                    [selectedColorPreference]: nextValue,
+                                  },
+                                },
+                              }));
+                            }}
+                            style={{ flex: "1 1 auto", minWidth: 0 }}
+                          />
+                          <span style={{ width: 36, textAlign: "right", fontSize: 12, color: "#666" }}>
+                            {(selectedColorPreference ? designIntent.color.preferences[selectedColorPreference] ?? 0 : 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: "#2f3d2f" }}>
+                        前中后排密度
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, marginBottom: 4 }}>
+                          Front Density: {densityStats.front.toFixed(2)} / {designIntent.density.front.toFixed(2)}
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={designIntent.density.front}
+                          onPointerDown={captureUndoSnapshot}
+                          onChange={(e) => {
+                            setLastDensityBand("front");
+                            setDesignIntent((prev) => ({
+                              ...prev,
+                              density: { ...prev.density, front: Number(e.target.value) },
+                            }));
+                          }}
+                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, marginBottom: 4 }}>
+                          Middle Density: {densityStats.middle.toFixed(2)} / {designIntent.density.middle.toFixed(2)}
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={designIntent.density.middle}
+                          onPointerDown={captureUndoSnapshot}
+                          onChange={(e) => {
+                            setLastDensityBand("middle");
+                            setDesignIntent((prev) => ({
+                              ...prev,
+                              density: { ...prev.density, middle: Number(e.target.value) },
+                            }));
+                          }}
+                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                        />
+                      </div>
+                      <div style={{ marginBottom: 2 }}>
+                        <div style={{ fontSize: 12, marginBottom: 4 }}>
+                          Back Density: {densityStats.back.toFixed(2)} / {designIntent.density.back.toFixed(2)}
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={designIntent.density.back}
+                          onPointerDown={captureUndoSnapshot}
+                          onChange={(e) => {
+                            setLastDensityBand("back");
+                            setDesignIntent((prev) => ({
+                              ...prev,
+                              density: { ...prev.density, back: Number(e.target.value) },
+                            }));
+                          }}
+                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 {selectedCell ? (
                   <div

@@ -20,6 +20,12 @@ export type DesignIntent = {
   };
   plant: {
     preferences: Record<string, number>;
+    edgePreferences: Record<string, number>;
+    centerPreferences: Record<string, number>;
+    cornerPreferences: Record<string, number>;
+    frontPreferences: Record<string, number>;
+    middlePreferences: Record<string, number>;
+    backPreferences: Record<string, number>;
   };
 };
 
@@ -32,6 +38,12 @@ export type DesignIntentPatch = {
   };
   plant?: {
     preferences?: Record<string, number>;
+    edgePreferences?: Record<string, number>;
+    centerPreferences?: Record<string, number>;
+    cornerPreferences?: Record<string, number>;
+    frontPreferences?: Record<string, number>;
+    middlePreferences?: Record<string, number>;
+    backPreferences?: Record<string, number>;
   };
 };
 
@@ -54,6 +66,30 @@ export function applyDesignIntentPatch(current: DesignIntent, patch: DesignInten
       preferences: {
         ...current.plant.preferences,
         ...(patch.plant?.preferences ?? {}),
+      },
+      edgePreferences: {
+        ...current.plant.edgePreferences,
+        ...(patch.plant?.edgePreferences ?? {}),
+      },
+      centerPreferences: {
+        ...current.plant.centerPreferences,
+        ...(patch.plant?.centerPreferences ?? {}),
+      },
+      cornerPreferences: {
+        ...current.plant.cornerPreferences,
+        ...(patch.plant?.cornerPreferences ?? {}),
+      },
+      frontPreferences: {
+        ...current.plant.frontPreferences,
+        ...(patch.plant?.frontPreferences ?? {}),
+      },
+      middlePreferences: {
+        ...current.plant.middlePreferences,
+        ...(patch.plant?.middlePreferences ?? {}),
+      },
+      backPreferences: {
+        ...current.plant.backPreferences,
+        ...(patch.plant?.backPreferences ?? {}),
       },
     },
   };
@@ -85,6 +121,48 @@ export function applyDesignIntentPatch(current: DesignIntent, patch: DesignInten
   }
   next.plant.preferences = sanitizedPlantPreferences;
 
+  const sanitizedEdgePlantPreferences: Record<string, number> = {};
+  for (const [key, value] of Object.entries(next.plant.edgePreferences)) {
+    if (!Number.isFinite(value)) continue;
+    sanitizedEdgePlantPreferences[key] = clamp(value, -1, 1);
+  }
+  next.plant.edgePreferences = sanitizedEdgePlantPreferences;
+
+  const sanitizedCenterPlantPreferences: Record<string, number> = {};
+  for (const [key, value] of Object.entries(next.plant.centerPreferences)) {
+    if (!Number.isFinite(value)) continue;
+    sanitizedCenterPlantPreferences[key] = clamp(value, -1, 1);
+  }
+  next.plant.centerPreferences = sanitizedCenterPlantPreferences;
+
+  const sanitizedCornerPlantPreferences: Record<string, number> = {};
+  for (const [key, value] of Object.entries(next.plant.cornerPreferences)) {
+    if (!Number.isFinite(value)) continue;
+    sanitizedCornerPlantPreferences[key] = clamp(value, -1, 1);
+  }
+  next.plant.cornerPreferences = sanitizedCornerPlantPreferences;
+
+  const sanitizedFrontPlantPreferences: Record<string, number> = {};
+  for (const [key, value] of Object.entries(next.plant.frontPreferences)) {
+    if (!Number.isFinite(value)) continue;
+    sanitizedFrontPlantPreferences[key] = clamp(value, -1, 1);
+  }
+  next.plant.frontPreferences = sanitizedFrontPlantPreferences;
+
+  const sanitizedMiddlePlantPreferences: Record<string, number> = {};
+  for (const [key, value] of Object.entries(next.plant.middlePreferences)) {
+    if (!Number.isFinite(value)) continue;
+    sanitizedMiddlePlantPreferences[key] = clamp(value, -1, 1);
+  }
+  next.plant.middlePreferences = sanitizedMiddlePlantPreferences;
+
+  const sanitizedBackPlantPreferences: Record<string, number> = {};
+  for (const [key, value] of Object.entries(next.plant.backPreferences)) {
+    if (!Number.isFinite(value)) continue;
+    sanitizedBackPlantPreferences[key] = clamp(value, -1, 1);
+  }
+  next.plant.backPreferences = sanitizedBackPlantPreferences;
+
   return next;
 }
 
@@ -110,5 +188,11 @@ export const DEFAULT_DESIGN_INTENT: DesignIntent = {
   },
   plant: {
     preferences: {},
+    edgePreferences: {},
+    centerPreferences: {},
+    cornerPreferences: {},
+    frontPreferences: {},
+    middlePreferences: {},
+    backPreferences: {},
   },
 };

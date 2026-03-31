@@ -199,6 +199,130 @@ function plantBiasFactor(candidate: PlantVariant, preferences: Record<string, nu
   return Math.max(0.05, 1 + preference * 0.95);
 }
 
+function edgePlantBiasFactor(
+  candidate: PlantVariant,
+  candidateRow: number,
+  candidateCol: number,
+  rows: number,
+  cols: number,
+  preferences: Record<string, number>
+) {
+  const keys = [candidate.id, candidate.categoryId ?? ""].map((value) => value.trim()).filter(Boolean);
+  let preference = 0;
+  for (const key of keys) {
+    const value = Math.max(-1, Math.min(1, preferences[key] ?? 0));
+    if (Math.abs(value) > Math.abs(preference)) {
+      preference = value;
+    }
+  }
+  if (preference === 0) return 1;
+
+  const maxEdgeDistance = Math.max(1, Math.floor(Math.min(rows, cols) * 0.25));
+  const edgeDistance = Math.min(candidateRow, candidateCol, rows - 1 - candidateRow, cols - 1 - candidateCol);
+  const edgeCloseness = 1 - Math.min(1, edgeDistance / maxEdgeDistance);
+  if (preference > 0) {
+    return 1 + preference * edgeCloseness * 2.4;
+  }
+  return Math.max(0.05, 1 + preference * edgeCloseness * 1.8);
+}
+
+function centerPlantBiasFactor(
+  candidate: PlantVariant,
+  candidateRow: number,
+  candidateCol: number,
+  rows: number,
+  cols: number,
+  preferences: Record<string, number>
+) {
+  const keys = [candidate.id, candidate.categoryId ?? ""].map((value) => value.trim()).filter(Boolean);
+  let preference = 0;
+  for (const key of keys) {
+    const value = Math.max(-1, Math.min(1, preferences[key] ?? 0));
+    if (Math.abs(value) > Math.abs(preference)) {
+      preference = value;
+    }
+  }
+  if (preference === 0) return 1;
+  const rowCenter = rows <= 1 ? 0 : (rows - 1) / 2;
+  const colCenter = cols <= 1 ? 0 : (cols - 1) / 2;
+  const rowDistance = Math.abs(candidateRow - rowCenter) / Math.max(1, rowCenter);
+  const colDistance = Math.abs(candidateCol - colCenter) / Math.max(1, colCenter);
+  const centerCloseness = 1 - Math.min(1, (rowDistance + colDistance) / 2);
+  if (preference > 0) {
+    return 1 + preference * centerCloseness * 2.4;
+  }
+  return Math.max(0.05, 1 + preference * centerCloseness * 1.8);
+}
+
+function cornerPlantBiasFactor(
+  candidate: PlantVariant,
+  candidateRow: number,
+  candidateCol: number,
+  rows: number,
+  cols: number,
+  preferences: Record<string, number>
+) {
+  const keys = [candidate.id, candidate.categoryId ?? ""].map((value) => value.trim()).filter(Boolean);
+  let preference = 0;
+  for (const key of keys) {
+    const value = Math.max(-1, Math.min(1, preferences[key] ?? 0));
+    if (Math.abs(value) > Math.abs(preference)) {
+      preference = value;
+    }
+  }
+  if (preference === 0) return 1;
+  const cornerDistances = [
+    Math.hypot(candidateRow, candidateCol),
+    Math.hypot(candidateRow, cols - 1 - candidateCol),
+    Math.hypot(rows - 1 - candidateRow, candidateCol),
+    Math.hypot(rows - 1 - candidateRow, cols - 1 - candidateCol),
+  ];
+  const nearestCorner = Math.min(...cornerDistances);
+  const maxCornerDistance = Math.max(1, Math.hypot(rows - 1, cols - 1) / 2);
+  const cornerCloseness = 1 - Math.min(1, nearestCorner / maxCornerDistance);
+  if (preference > 0) {
+    return 1 + preference * cornerCloseness * 2.6;
+  }
+  return Math.max(0.05, 1 + preference * cornerCloseness * 2);
+}
+
+function boundaryPlantFactor(
+  candidate: PlantVariant,
+  candidateRow: number,
+  candidateCol: number,
+  rows: number,
+  cols: number
+) {
+  if (!candidate.boundary) return 1;
+  const maxEdgeDistance = Math.max(1, Math.floor(Math.min(rows, cols) * 0.3));
+  const edgeDistance = Math.min(candidateRow, candidateCol, rows - 1 - candidateRow, cols - 1 - candidateCol);
+  const edgeCloseness = 1 - Math.min(1, edgeDistance / maxEdgeDistance);
+  return 0.82 + edgeCloseness * 1.18;
+}
+
+function bandPlantBiasFactor(
+  candidate: PlantVariant,
+  candidateRow: number,
+  rows: number,
+  band: DensityBand,
+  preferences: Record<string, number>
+) {
+  const keys = [candidate.id, candidate.categoryId ?? ""].map((value) => value.trim()).filter(Boolean);
+  let preference = 0;
+  for (const key of keys) {
+    const value = Math.max(-1, Math.min(1, preferences[key] ?? 0));
+    if (Math.abs(value) > Math.abs(preference)) {
+      preference = value;
+    }
+  }
+  if (preference === 0) return 1;
+  const candidateBand = rowBand(candidateRow, rows);
+  if (candidateBand === band) {
+    return preference > 0 ? 1 + preference * 2.2 : Math.max(0.05, 1 + preference * 1.8);
+  }
+  return preference > 0 ? Math.max(0.3, 1 - preference * 0.55) : 1 + Math.abs(preference) * 0.35;
+}
+
 function symmetryPositionFactor(
   candidateRow: number,
   candidateCol: number,
@@ -822,6 +946,12 @@ function pickWeighted(
   clusteriness: number,
   colorPreferences: Record<string, number>,
   plantPreferences: Record<string, number>,
+  edgePlantPreferences: Record<string, number>,
+  centerPlantPreferences: Record<string, number>,
+  cornerPlantPreferences: Record<string, number>,
+  frontPlantPreferences: Record<string, number>,
+  middlePlantPreferences: Record<string, number>,
+  backPlantPreferences: Record<string, number>,
   occupiedByBand: BandCounts,
   totalByBand: BandCounts,
   targetByBand: BandCounts,
@@ -862,6 +992,13 @@ function pickWeighted(
     );
     const colorFactor = colorBiasFactor(v, colorPreferences);
     const plantFactor = plantBiasFactor(v, plantPreferences);
+    const edgePlantFactor = edgePlantBiasFactor(v, candidateRow, candidateCol, rows, cols, edgePlantPreferences);
+    const centerPlantFactor = centerPlantBiasFactor(v, candidateRow, candidateCol, rows, cols, centerPlantPreferences);
+    const cornerPlantFactor = cornerPlantBiasFactor(v, candidateRow, candidateCol, rows, cols, cornerPlantPreferences);
+    const boundaryFactor = boundaryPlantFactor(v, candidateRow, candidateCol, rows, cols);
+    const frontPlantFactor = bandPlantBiasFactor(v, candidateRow, rows, "front", frontPlantPreferences);
+    const middlePlantFactor = bandPlantBiasFactor(v, candidateRow, rows, "middle", middlePlantPreferences);
+    const backPlantFactor = bandPlantBiasFactor(v, candidateRow, rows, "back", backPlantPreferences);
     const mirrorFactor = symmetryFactor(v, candidateRow, candidateCol, cols, rows, placed, symmetryStrength,variantMap);
     const base = 1 + ((i % 5) * 0.03);
     return {
@@ -872,6 +1009,13 @@ function pickWeighted(
       clusterinessFactor,
       colorFactor,
       plantFactor,
+      edgePlantFactor,
+      centerPlantFactor,
+      cornerPlantFactor,
+      boundaryFactor,
+      frontPlantFactor,
+      middlePlantFactor,
+      backPlantFactor,
       mirrorFactor,
       weight:
         base *
@@ -882,6 +1026,13 @@ function pickWeighted(
         clusterinessFactor *
         colorFactor *
         plantFactor *
+        edgePlantFactor *
+        centerPlantFactor *
+        cornerPlantFactor *
+        boundaryFactor *
+        frontPlantFactor *
+        middlePlantFactor *
+        backPlantFactor *
         mirrorFactor,
     };
   });
@@ -900,6 +1051,13 @@ function pickWeighted(
         clusterinessFactor: Number(chosen.clusterinessFactor.toFixed(4)),
         colorFactor: Number(chosen.colorFactor.toFixed(4)),
         plantFactor: Number(chosen.plantFactor.toFixed(4)),
+        edgePlantFactor: Number(chosen.edgePlantFactor.toFixed(4)),
+        centerPlantFactor: Number(chosen.centerPlantFactor.toFixed(4)),
+        cornerPlantFactor: Number(chosen.cornerPlantFactor.toFixed(4)),
+        boundaryFactor: Number(chosen.boundaryFactor.toFixed(4)),
+        frontPlantFactor: Number(chosen.frontPlantFactor.toFixed(4)),
+        middlePlantFactor: Number(chosen.middlePlantFactor.toFixed(4)),
+        backPlantFactor: Number(chosen.backPlantFactor.toFixed(4)),
         mirrorFactor: Number(chosen.mirrorFactor.toFixed(4)),
         weight: Number(chosen.weight.toFixed(4)),
       });
@@ -915,6 +1073,13 @@ function pickWeighted(
     clusterinessFactor: Number(fallback.clusterinessFactor.toFixed(4)),
     colorFactor: Number(fallback.colorFactor.toFixed(4)),
     plantFactor: Number(fallback.plantFactor.toFixed(4)),
+    edgePlantFactor: Number(fallback.edgePlantFactor.toFixed(4)),
+    centerPlantFactor: Number(fallback.centerPlantFactor.toFixed(4)),
+    cornerPlantFactor: Number(fallback.cornerPlantFactor.toFixed(4)),
+    boundaryFactor: Number(fallback.boundaryFactor.toFixed(4)),
+    frontPlantFactor: Number(fallback.frontPlantFactor.toFixed(4)),
+    middlePlantFactor: Number(fallback.middlePlantFactor.toFixed(4)),
+    backPlantFactor: Number(fallback.backPlantFactor.toFixed(4)),
     mirrorFactor: Number(fallback.mirrorFactor.toFixed(4)),
     weight: Number(fallback.weight.toFixed(4)),
     fallback: true,
@@ -941,6 +1106,12 @@ export function generateAutoLayout(
   const clusteriness = designIntent?.layout.clusteriness ?? 0.35;
   const colorPreferences = designIntent?.color.preferences ?? {};
   const plantPreferences = designIntent?.plant.preferences ?? {};
+  const edgePlantPreferences = designIntent?.plant.edgePreferences ?? {};
+  const centerPlantPreferences = designIntent?.plant.centerPreferences ?? {};
+  const cornerPlantPreferences = designIntent?.plant.cornerPreferences ?? {};
+  const frontPlantPreferences = designIntent?.plant.frontPreferences ?? {};
+  const middlePlantPreferences = designIntent?.plant.middlePreferences ?? {};
+  const backPlantPreferences = designIntent?.plant.backPreferences ?? {};
   const targetByBand: BandCounts = {
     front: clamp01(designIntent?.density.front ?? 0.62),
     middle: clamp01(designIntent?.density.middle ?? 0.62),
@@ -1036,6 +1207,12 @@ export function generateAutoLayout(
       clusteriness,
       colorPreferences,
       plantPreferences,
+      edgePlantPreferences,
+      centerPlantPreferences,
+      cornerPlantPreferences,
+      frontPlantPreferences,
+      middlePlantPreferences,
+      backPlantPreferences,
       occupiedByBand,
       totalByBand,
       targetByBand,

@@ -12,6 +12,7 @@ export type PlantVariant = {
   baseHeight: number;
   footprint?: [number, number];
   tags?: string[];
+  boundary?: boolean;
   sun?: "full" | "partial" | "shade";
   water?: "low" | "medium" | "high";
   bloomSeasons?: ("spring" | "summer" | "autumn" | "winter")[];
