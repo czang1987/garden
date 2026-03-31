@@ -6,9 +6,11 @@ import type { GardenState, Season } from "./store/garden";
 import { DEFAULT_DESIGN_INTENT, applyDesignIntentPatch, type DesignIntent } from "./type/designIntent";
 import type { PlantCatalogData, PlantCategory, PlantVariant } from "./type/plants";
 import {
+  adjustSymmetry,
   generateAutoLayout,
   maxHeightForRow,
   minHeightForRow,
+  prunePlantsByColorPreferences,
   prunePlantsByDensityTargets,
   prunePlantsByHeightRange,
   prunePlantsByZone,
@@ -255,6 +257,7 @@ export default function App() {
   const [catalogPaneWidth, setCatalogPaneWidth] = useState(320);
   const [designIntent, setDesignIntent] = useState<DesignIntent>(DEFAULT_DESIGN_INTENT);
   const [lastDensityBand, setLastDensityBand] = useState<"front" | "middle" | "back" | null>(null);
+  const [lastColorPruneKey, setLastColorPruneKey] = useState<string | null>(null);
   const [rightPanel, setRightPanel] = useState<"catalog" | "auto">("auto");
   const [selectedColorPreference, setSelectedColorPreference] = useState("");
   const [isGeneratingLayout, setIsGeneratingLayout] = useState(false);
@@ -276,6 +279,8 @@ export default function App() {
   const [designIntentMessage, setDesignIntentMessage] = useState("");
   const [designIntentSummary, setDesignIntentSummary] = useState("");
   const [isApplyingAiIntent, setIsApplyingAiIntent] = useState(false);
+  const previousSymmetryRef = useRef(designIntent.layout.symmetry);
+  const designIntentRef = useRef(designIntent);
   const availableColors = useMemo(
     () =>
       Array.from(
@@ -316,6 +321,10 @@ export default function App() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    designIntentRef.current = designIntent;
+  }, [designIntent]);
 
   useEffect(() => {
     setRowsInput(garden.rows);
@@ -561,7 +570,6 @@ export default function App() {
       await new Promise((resolve) => window.setTimeout(resolve, 0));
       setGarden((prev) => {
         return generateAutoLayout(prev, allVariants, {
-          targetCoverage: 0.62,
           designIntent,
         });
       });
@@ -949,7 +957,13 @@ export default function App() {
         designIntent
       )
     );
-  }, [allVariants, designIntent]);
+  }, [
+    allVariants,
+    designIntent.layout.frontMin,
+    designIntent.layout.backMin,
+    designIntent.layout.frontMax,
+    designIntent.layout.backMax,
+  ]);
 
   useEffect(() => {
     setGarden((prev) =>
@@ -960,7 +974,30 @@ export default function App() {
         lastDensityBand ?? undefined
       )
     );
-  }, [allVariants, designIntent, lastDensityBand]);
+  }, [
+    allVariants,
+    designIntent.density.front,
+    designIntent.density.middle,
+    designIntent.density.back,
+    lastDensityBand,
+  ]);
+
+  useEffect(() => {
+    if (!lastColorPruneKey) return;
+    setGarden((prev) =>
+      prunePlantsByColorPreferences(prev, allVariants, designIntent, lastColorPruneKey)
+    );
+    setLastColorPruneKey(null);
+  }, [allVariants, designIntent.color.preferences, lastColorPruneKey]);
+
+  useEffect(() => {
+    const previousSymmetry = previousSymmetryRef.current;
+    const nextSymmetry = designIntent.layout.symmetry;
+    previousSymmetryRef.current = nextSymmetry;
+    if (allVariants.length === 0) return;
+    if (nextSymmetry <= previousSymmetry) return;
+    setGarden((prev) => adjustSymmetry(prev, allVariants, designIntentRef.current));
+  }, [allVariants, designIntent.layout.symmetry]);
 
   useEffect(() => {
     setGarden((prev) => prunePlantsByZone(prev, allVariants));
@@ -1167,38 +1204,6 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <button
-          type="button"
-          onClick={() => choosePlant(null)}
-          disabled={!selectedPlantAnchor}
-          style={{
-            flex: "0 0 auto",
-            padding: "7px 11px",
-            borderRadius: 999,
-            border: "1px solid #cdbdb3",
-            background: selectedPlantAnchor ? "#fff7f3" : "#f2ede7",
-            color: selectedPlantAnchor ? "#7f4a36" : "#9b9185",
-            fontSize: 12,
-            fontWeight: 700,
-            whiteSpace: "nowrap",
-            cursor: selectedPlantAnchor ? "pointer" : "not-allowed",
-          }}
-        >
-          删除植物
-        </button>
-        <span style={{ fontSize: 13, color: "#444", marginLeft: 8 }}>调整视角</span>
-        <input
-          type="range"
-          min={0.15}
-          max={1}
-          step={0.01}
-          value={rowGapRatio}
-          onChange={(e) => setRowGapRatio(Number(e.target.value))}
-          style={{ width: 260 }}
-        />
-      </div>
-
       {reportViewsActive ? (
         <div
           style={{
@@ -1387,16 +1392,33 @@ export default function App() {
                   ? "点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，可按 Delete / Backspace，或点“删除植物”按钮。"
                   : "效果预览是静态图，不可编辑；切回编辑模式后可继续摆放和删除植物。"}
               </div>
-              <div
-                style={{
-                  display: "inline-flex",
-                  gap: 6,
-                  padding: 4,
-                  borderRadius: 999,
-                  background: "#f3efe7",
-                  border: "1px solid #e0d8cb",
-                }}
-              >
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => choosePlant(null)}
+                  disabled={!selectedPlantAnchor}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: "1px solid #cdbdb3",
+                    background: selectedPlantAnchor ? "#fff7f3" : "#f2ede7",
+                    color: selectedPlantAnchor ? "#7f4a36" : "#9b9185",
+                    whiteSpace: "nowrap",
+                    cursor: selectedPlantAnchor ? "pointer" : "not-allowed",
+                  }}
+                >
+                  删除植物
+                </button>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    gap: 6,
+                    padding: 4,
+                    borderRadius: 999,
+                    background: "#f3efe7",
+                    border: "1px solid #e0d8cb",
+                  }}
+                >
                 <button
                   type="button"
                   onClick={() => setFrontViewMode("edit")}
@@ -1425,80 +1447,144 @@ export default function App() {
                 >
                   {isGeneratingFrontViewPreview ? "生成预览中..." : "效果预览"}
                 </button>
+                </div>
               </div>
             </div>
-            <div style={{ display: frontViewMode === "edit" ? "block" : "none" }}>
-              <FrontView
-                ref={frontViewRef}
-                garden={garden}
-                colGap={colGap}
-                rowGap={rowGap}
-                monetMode={false}
-                canvasWidth={canvasWidth}
-                showEditGrid={editMode}
-                selectedCell={selectedCell}
-                symmetryHints={symmetryHints}
-                onCellSelect={(cell) => {
-                  setEditMode(true);
-                  setSelectedCell(cell);
-                }}
-                onCanvasBackgroundClick={() => {
-                  setEditMode(false);
-                  setSelectedCell(null);
-                }}
-                onTextureLoadProgressChange={setFrontViewTextureLoadProgress}
-              />
-            </div>
-            {frontViewMode === "preview" ? (
-              <div
-                style={{
-                  width: canvasWidth,
-                  maxWidth: "100%",
-                  minHeight: 420,
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  border: "1px solid #ddd5c8",
-                  background: "#f8f4ec",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  position: "relative",
-                }}
-              >
-                {frontViewPreviewImage ? (
-                  <img
-                    src={frontViewPreviewImage}
-                    alt="front view stylized preview"
-                    style={{ display: "block", width: "100%", height: "auto" }}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: isPhoneLayout ? "column" : "row",
+                alignItems: "flex-start",
+                gap: isPhoneLayout ? 10 : 14,
+              }}
+            >
+              <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+                <div style={{ display: frontViewMode === "edit" ? "block" : "none" }}>
+                  <FrontView
+                    ref={frontViewRef}
+                    garden={garden}
+                    colGap={colGap}
+                    rowGap={rowGap}
+                    monetMode={false}
+                    canvasWidth={canvasWidth}
+                    showEditGrid={editMode}
+                    selectedCell={selectedCell}
+                    symmetryHints={symmetryHints}
+                    onCellSelect={(cell) => {
+                      setEditMode(true);
+                      setSelectedCell(cell);
+                    }}
+                    onCanvasBackgroundClick={() => {
+                      setEditMode(false);
+                      setSelectedCell(null);
+                    }}
+                    onTextureLoadProgressChange={setFrontViewTextureLoadProgress}
                   />
-                ) : (
-                  <div style={{ padding: 24, textAlign: "center", color: "#6e665b", fontSize: 13 }}>
-                    {frontViewPreviewError
-                      ? `效果预览生成失败：${frontViewPreviewError}`
-                      : isGeneratingFrontViewPreview
-                        ? "正在生成当前效果图预览..."
-                        : "点击“效果预览”生成当前 FrontView 的静态效果图。"}
-                  </div>
-                )}
-                {frontViewPreviewImage && !isGeneratingFrontViewPreview ? (
-                  <button
-                    type="button"
-                    onClick={showFrontViewPreview}
+                </div>
+                {frontViewMode === "preview" ? (
+                  <div
                     style={{
-                      position: "absolute",
-                      top: 12,
-                      right: 12,
-                      padding: "7px 10px",
-                      borderRadius: 999,
-                      background: "rgba(255,255,255,0.92)",
-                      border: "1px solid #d9d9d9",
+                      width: canvasWidth,
+                      maxWidth: "100%",
+                      minHeight: 420,
+                      borderRadius: 16,
+                      overflow: "hidden",
+                      border: "1px solid #ddd5c8",
+                      background: "#f8f4ec",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      position: "relative",
                     }}
                   >
-                    刷新预览
-                  </button>
+                    {frontViewPreviewImage ? (
+                      <img
+                        src={frontViewPreviewImage}
+                        alt="front view stylized preview"
+                        style={{ display: "block", width: "100%", height: "auto" }}
+                      />
+                    ) : (
+                      <div style={{ padding: 24, textAlign: "center", color: "#6e665b", fontSize: 13 }}>
+                        {frontViewPreviewError
+                          ? `效果预览生成失败：${frontViewPreviewError}`
+                          : isGeneratingFrontViewPreview
+                            ? "正在生成当前效果图预览..."
+                            : "点击“效果预览”生成当前 FrontView 的静态效果图。"}
+                      </div>
+                    )}
+                    {frontViewPreviewImage && !isGeneratingFrontViewPreview ? (
+                      <button
+                        type="button"
+                        onClick={showFrontViewPreview}
+                        style={{
+                          position: "absolute",
+                          top: 12,
+                          right: 12,
+                          padding: "7px 10px",
+                          borderRadius: 999,
+                          background: "rgba(255,255,255,0.92)",
+                          border: "1px solid #d9d9d9",
+                        }}
+                      >
+                        刷新预览
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
-            ) : null}
+              <div
+                style={{
+                  flex: "0 0 auto",
+                  display: "flex",
+                  flexDirection: isPhoneLayout ? "row" : "column",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  gap: 10,
+                  alignSelf: "flex-start",
+                  padding: isPhoneLayout ? "4px 0" : "0 2px",
+                  minHeight: isPhoneLayout ? undefined : 420,
+                }}
+              >
+                {isPhoneLayout ? (
+                  <input
+                    type="range"
+                    min={0.15}
+                    max={1}
+                    step={0.01}
+                    value={rowGapRatio}
+                    onChange={(e) => setRowGapRatio(Number(e.target.value))}
+                    style={{ width: "100%", minWidth: 180 }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 34,
+                      height: "100%",
+                      position: "relative",
+                      overflow: "visible",
+                    }}
+                  >
+                    <input
+                      type="range"
+                      min={0.15}
+                      max={1}
+                      step={0.01}
+                      value={rowGapRatio}
+                      onChange={(e) => setRowGapRatio(Number(e.target.value))}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 17,
+                        width: 420,
+                        margin: 0,
+                        transform: "rotate(-90deg) translateX(-100%)",
+                        transformOrigin: "top left",
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1841,12 +1927,15 @@ export default function App() {
                       value={selectedColorPreference ? designIntent.color.preferences[selectedColorPreference] ?? 0 : 0}
                       onChange={(e) => {
                         if (!selectedColorPreference) return;
+                        const nextValue = Number(e.target.value);
+                        const currentValue = designIntent.color.preferences[selectedColorPreference] ?? 0;
+                        setLastColorPruneKey(nextValue < currentValue ? selectedColorPreference : null);
                         setDesignIntent((prev) => ({
                           ...prev,
                           color: {
                             preferences: {
                               ...prev.color.preferences,
-                              [selectedColorPreference]: Number(e.target.value),
+                              [selectedColorPreference]: nextValue,
                             },
                           },
                         }));

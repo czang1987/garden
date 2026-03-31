@@ -19,7 +19,6 @@ export type LayoutScore = {
 
 type EngineOptions = {
   seed?: number;
-  targetCoverage?: number;
   designIntent?: DesignIntent;
 };
 
@@ -91,9 +90,9 @@ function symmetryFactor(
     
     if (item.id === candidate.id) {
       bestSamePlantScore = 1;
-    } else {
+    } /*else {
       bestAnyPlantScore = 1;
-    }
+    }*/
   }
 
   if (bestSamePlantScore >= 0) {
@@ -171,14 +170,18 @@ function clusterFactor(
   return 1;
 }
 
-function colorBiasFactor(candidate: PlantVariant, preferences: Record<string, number>) {
-  const normalizedColor = candidate.color?.trim().toLowerCase() ?? "";
+function colorBiasForName(color: string | undefined, preferences: Record<string, number>) {
+  const normalizedColor = color?.trim().toLowerCase() ?? "";
   if (!normalizedColor) return 1;
   const preference = Math.max(-1, Math.min(1, preferences[normalizedColor] ?? 0));
   if (preference <= -1) return 0;
   if (preference === 0) return 1;
   if (preference > 0) return 1 + preference * 1.15;
   return Math.max(0.05, 1 + preference * 0.95);
+}
+
+function colorBiasFactor(candidate: PlantVariant, preferences: Record<string, number>) {
+  return colorBiasForName(candidate.color, preferences);
 }
 
 function symmetryPositionFactor(
@@ -424,6 +427,7 @@ export function prunePlantsByDensityTargets(
         row: cell.row,
         col: cell.col,
         id: cell.plant,
+        color: variant.color?.trim().toLowerCase() ?? "",
         counts: footprintBandCounts({ r: cell.row, c: cell.col }, fp, garden.rows),
       };
     })
@@ -482,6 +486,170 @@ export function prunePlantsByDensityTargets(
   }
 
   return next;
+}
+
+export function prunePlantsByColorPreferences(
+  garden: GardenState,
+  variants: PlantVariant[],
+  designIntent: DesignIntent,
+  preferredColor?: string
+) {
+  const colorPreferences = designIntent.color.preferences ?? {};
+  const hasColorPreference = Object.values(colorPreferences).some((value) => Math.abs(value) > 0);
+  if (!hasColorPreference) return garden;
+
+  const variantMap = new Map(variants.map((v) => [v.id, v] as const));
+  const next: GardenState = {
+    ...garden,
+    cells: garden.cells.map((cell) => ({ ...cell })),
+  };
+
+  const anchors = next.cells
+    .filter((cell) => cell.plant && cell.plant !== "empty")
+    .map((cell) => {
+      const variant = variantMap.get(cell.plant);
+      if (!variant) return null;
+      const fp = (variant.footprint ?? [1, 1]) as [number, number];
+      return {
+        row: cell.row,
+        col: cell.col,
+        id: cell.plant,
+        color: variant.color?.trim().toLowerCase() ?? "",
+        counts: footprintBandCounts({ r: cell.row, c: cell.col }, fp, garden.rows),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => !!item);
+
+  const normalizedPreferredColor = preferredColor?.trim().toLowerCase() ?? "";
+
+  while (anchors.length > 0) {
+    const colorCounts = new Map<string, number>();
+    for (const anchor of anchors) {
+      const color = anchor.color || "__unknown__";
+      colorCounts.set(color, (colorCounts.get(color) ?? 0) + 1);
+    }
+
+    const weightedColors = Array.from(colorCounts.keys()).map((color) => ({
+      color,
+      count: colorCounts.get(color) ?? 0,
+      weight: color === "__unknown__" ? 1 : colorBiasForName(color, colorPreferences),
+    }));
+
+    const totalPlants = anchors.length;
+    const totalWeight = weightedColors.reduce((sum, item) => sum + item.weight, 0);
+    if (totalPlants <= 0 || totalWeight <= 0) break;
+
+    const colorCandidates = weightedColors
+      .map((item) => ({
+        ...item,
+        actualRatio: item.count / totalPlants,
+        targetRatio: item.weight / totalWeight,
+        overflow: item.count / totalPlants - item.weight / totalWeight,
+      }))
+      .filter((item) =>
+        normalizedPreferredColor ? item.color === normalizedPreferredColor : item.overflow > 0
+      );
+
+    if (colorCandidates.length === 0) break;
+
+    const chosenColorEntry = normalizedPreferredColor
+      ? colorCandidates[0]
+      : colorCandidates.reduce((best, current) => (current.overflow > best.overflow ? current : best));
+
+    if (!chosenColorEntry || chosenColorEntry.overflow <= 0) break;
+
+    let chosenIndex = -1;
+    let chosenScore = -1;
+    for (let i = 0; i < anchors.length; i++) {
+      const candidate = anchors[i];
+      const candidateColor = candidate.color || "__unknown__";
+      if (candidateColor !== chosenColorEntry.color) continue;
+      const score =
+        candidate.counts.front +
+        candidate.counts.middle +
+        candidate.counts.back;
+      if (score > chosenScore || (score === chosenScore && Math.random() < 0.5)) {
+        chosenScore = score;
+        chosenIndex = i;
+      }
+    }
+
+    if (chosenIndex < 0) break;
+
+    const [removed] = anchors.splice(chosenIndex, 1);
+    const cell = next.cells.find((item) => item.row === removed.row && item.col === removed.col);
+    if (cell) cell.plant = "empty";
+  }
+
+  return next;
+}
+
+export function prunePlantsBySymmetryThreshold(
+  garden: GardenState,
+  variants: PlantVariant[],
+  symmetryStrength: number,
+  threshold = 1
+) {
+  const strength = clamp01(symmetryStrength);
+  if (strength <= 0) return garden;
+
+  const variantMap = new Map(variants.map((v) => [v.id, v] as const));
+  const anchors = garden.cells
+    .filter((cell) => cell.plant && cell.plant !== "empty")
+    .map((cell) => ({ r: cell.row, c: cell.col, id: cell.plant as string }));
+
+  const toRemove = new Set<string>();
+  for (let i = 0; i < anchors.length; i++) {
+    const current = anchors[i];
+    const variant = variantMap.get(current.id);
+    if (!variant) continue;
+    const others = anchors.filter((_, index) => index !== i);
+    const score = symmetryFactor(
+      variant,
+      current.r,
+      current.c,
+      garden.cols,
+      garden.rows,
+      others,
+      strength,
+      variantMap
+    );
+    console.log(
+      `[symmetry] ${current.id} @ (${current.r},${current.c}) => ${score.toFixed(4)} (threshold ${threshold.toFixed(4)})`
+    );
+    if (score < threshold) {
+      toRemove.add(`${current.r}:${current.c}`);
+    }
+  }
+
+  console.log(`[symmetry] pruning ${toRemove.size} plant(s) below threshold ${threshold.toFixed(4)}`);
+  if (toRemove.size === 0) return garden;
+
+  return {
+    ...garden,
+    cells: garden.cells.map((cell) =>
+      toRemove.has(`${cell.row}:${cell.col}`) ? { ...cell, plant: "empty" } : cell
+    ),
+  };
+}
+
+export function adjustSymmetry(
+  garden: GardenState,
+  variants: PlantVariant[],
+  designIntent: DesignIntent,
+  threshold?: number
+) {
+  const resolvedThreshold =
+    typeof threshold === "number"
+      ? threshold
+      : 1 + clamp01(designIntent.layout.symmetry) * 0.12;
+  const pruned = prunePlantsBySymmetryThreshold(
+    garden,
+    variants,
+    designIntent.layout.symmetry,
+    resolvedThreshold
+  );
+  return generateAutoLayout(pruned, variants, { designIntent });
 }
 
 function seededRandom(seed: number) {
@@ -555,7 +723,7 @@ function densityFactor(
       factor *= 1 + (targetRatio - nextRatio) * 0.8;
     } else {
       const overflow = nextRatio - targetRatio;
-      factor *= Math.max(0.05, 1 - overflow * 3);
+      factor *= Math.max(0.0, 1 - overflow * 3);
     }
   }
   return factor;
@@ -751,15 +919,19 @@ export function generateAutoLayout(
   const symmetryStrength = designIntent?.layout.symmetry ?? 0;
   const clusteriness = designIntent?.layout.clusteriness ?? 0.35;
   const colorPreferences = designIntent?.color.preferences ?? {};
-  const total = rows * cols;
-  const targetCoverage = clamp01(options.targetCoverage ?? 0.62);
-  const targetOccupiedCells = Math.max(1, Math.floor(total * targetCoverage));
   const targetByBand: BandCounts = {
-    front: clamp01(designIntent?.density.front ?? targetCoverage),
-    middle: clamp01(designIntent?.density.middle ?? targetCoverage),
-    back: clamp01(designIntent?.density.back ?? targetCoverage),
+    front: clamp01(designIntent?.density.front ?? 0.62),
+    middle: clamp01(designIntent?.density.middle ?? 0.62),
+    back: clamp01(designIntent?.density.back ?? 0.62),
   };
   const totalByBand = totalCellsByBand(rows, cols);
+  const targetCellsByBand: BandCounts = {
+    front: Math.floor(totalByBand.front * targetByBand.front),
+    middle: Math.floor(totalByBand.middle * targetByBand.middle),
+    back: Math.floor(totalByBand.back * targetByBand.back),
+  };
+  const targetOccupiedCells =
+    targetCellsByBand.front + targetCellsByBand.middle + targetCellsByBand.back;
 
   const next: GardenState = {
     ...base,
@@ -848,10 +1020,12 @@ export function generateAutoLayout(
     );
     if (!chosen) break;
     const fp = (chosen.footprint ?? [1, 1]) as [number, number];
+    const footprintArea = fp[0] * fp[1];
 
     if (!canPlaceFootprint(occupied, rows, cols, { r, c }, fp)) continue;
+    if (used + footprintArea > targetOccupiedCells) continue;
     markFootprint(occupied, { r, c }, fp);
-    used += fp[0] * fp[1];
+    used += footprintArea;
     addBandCounts(occupiedByBand, footprintBandCounts({ r, c }, fp, rows));
     placed.push({ r, c, id: chosen.id });
   }
