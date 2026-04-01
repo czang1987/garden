@@ -94,7 +94,23 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function sanitizeDesignIntentPatch(patch, availableColors = []) {
+function sanitizePlantPreferenceMap(map, availablePlantKeys) {
+  const safe = {};
+  if (!map || typeof map !== "object") return safe;
+  for (const [key, value] of Object.entries(map)) {
+    if (!availablePlantKeys.has(key)) continue;
+    if (!Number.isFinite(value)) continue;
+    safe[key] = clamp(Number(value), -1, 1);
+  }
+  return safe;
+}
+
+function sanitizeDesignIntentPatch(patch, availableColors = [], availablePlantTargets = []) {
+  const availablePlantKeys = new Set(
+    Array.isArray(availablePlantTargets)
+      ? availablePlantTargets.map((item) => (item && typeof item.key === "string" ? item.key : "")).filter(Boolean)
+      : []
+  );
   const safe = {};
   if (patch && typeof patch === "object") {
     if (patch.height && typeof patch.height === "object") {
@@ -130,6 +146,27 @@ function sanitizeDesignIntentPatch(patch, availableColors = []) {
       }
       safe.color = { preferences: pref };
     }
+    if (patch.plant && typeof patch.plant === "object") {
+      const plant = {};
+      const preferenceKeys = [
+        "preferences",
+        "edgePreferences",
+        "centerPreferences",
+        "cornerPreferences",
+        "frontPreferences",
+        "middlePreferences",
+        "backPreferences",
+      ];
+      for (const key of preferenceKeys) {
+        const sanitized = sanitizePlantPreferenceMap(patch.plant[key], availablePlantKeys);
+        if (Object.keys(sanitized).length > 0) {
+          plant[key] = sanitized;
+        }
+      }
+      if (Object.keys(plant).length > 0) {
+        safe.plant = plant;
+      }
+    }
   }
   return safe;
 }
@@ -143,6 +180,36 @@ function summarizeDesignIntentDelta(current, patch) {
       preferences: {
         ...(current?.color?.preferences || {}),
         ...(patch?.color?.preferences || {}),
+      },
+    },
+    plant: {
+      preferences: {
+        ...(current?.plant?.preferences || {}),
+        ...(patch?.plant?.preferences || {}),
+      },
+      edgePreferences: {
+        ...(current?.plant?.edgePreferences || {}),
+        ...(patch?.plant?.edgePreferences || {}),
+      },
+      centerPreferences: {
+        ...(current?.plant?.centerPreferences || {}),
+        ...(patch?.plant?.centerPreferences || {}),
+      },
+      cornerPreferences: {
+        ...(current?.plant?.cornerPreferences || {}),
+        ...(patch?.plant?.cornerPreferences || {}),
+      },
+      frontPreferences: {
+        ...(current?.plant?.frontPreferences || {}),
+        ...(patch?.plant?.frontPreferences || {}),
+      },
+      middlePreferences: {
+        ...(current?.plant?.middlePreferences || {}),
+        ...(patch?.plant?.middlePreferences || {}),
+      },
+      backPreferences: {
+        ...(current?.plant?.backPreferences || {}),
+        ...(patch?.plant?.backPreferences || {}),
       },
     },
   };
@@ -164,6 +231,7 @@ function summarizeDesignIntentDelta(current, patch) {
       after: next.layout,
     },
     colorPreferencesPatch: patch?.color?.preferences || {},
+    plantPatch: patch?.plant || {},
   };
 }
 
@@ -252,7 +320,7 @@ function heuristicPatchFromMessage(message, availableColors = []) {
   };
 }
 
-async function generateDesignIntentPatchWithArk({ message, designIntent, zone, availableColors }) {
+async function generateDesignIntentPatchWithArk({ message, designIntent, zone, availableColors, availablePlantTargets }) {
   const apiKey = process.env.ARK_API_KEY;
   if (!apiKey || !ARK_TEXT_MODEL) {
     return heuristicPatchFromMessage(message, availableColors);
@@ -261,10 +329,14 @@ async function generateDesignIntentPatchWithArk({ message, designIntent, zone, a
   const systemPrompt = [
     "You convert a gardening request into a JSON patch.",
     "Return JSON only. No markdown. No extra explanation.",
-    'Output schema: {"patch":{"height"?:{"frontMin"?:number,"backMin"?:number,"frontMax"?:number,"backMax"?:number,"gradientStrength"?:number},"density"?:{"front"?:number,"middle"?:number,"back"?:number},"layout"?:{"symmetry"?:number,"clusteriness"?:number},"color"?:{"preferences"?:Record<string,number>}},"summary":string}.',
+    'Output schema: {"patch":{"height"?:{"frontMin"?:number,"backMin"?:number,"frontMax"?:number,"backMax"?:number,"gradientStrength"?:number},"density"?:{"front"?:number,"middle"?:number,"back"?:number},"layout"?:{"symmetry"?:number,"clusteriness"?:number},"color"?:{"preferences"?:Record<string,number>},"plant"?:{"preferences"?:Record<string,number>,"edgePreferences"?:Record<string,number>,"centerPreferences"?:Record<string,number>,"cornerPreferences"?:Record<string,number>,"frontPreferences"?:Record<string,number>,"middlePreferences"?:Record<string,number>,"backPreferences"?:Record<string,number>}},"summary":string}.',
     "Only include fields that should change.",
-    "Allowed ranges: frontMin/backMin 0-120; frontMax/backMax 0-160; gradientStrength 0-1; density 0-1; symmetry 0-1; clusteriness 0-1; color preference -1 to 1.",
+    "Allowed ranges: frontMin/backMin 0-120; frontMax/backMax 0-160; gradientStrength 0-1; density 0-1; symmetry 0-1; clusteriness 0-1; color preference -1 to 1; plant preference -1 to 1.",
     "Only use color keys from availableColors.",
+    "Only use plant keys from availablePlantTargets.",
+    "If the user mentions a specific plant, prefer patch.plant.* fields over color preferences whenever possible.",
+    "If the user mentions a spatial phrase like edge, center, corner, front row, middle row, or back row together with a plant, express that with patch.plant.edgePreferences, centerPreferences, cornerPreferences, frontPreferences, middlePreferences, or backPreferences.",
+    "Do not translate a named plant into a color preference unless the user explicitly talks about color.",
     "Prefer small conservative edits rather than large jumps.",
     "If the request is vague, return a small helpful patch.",
   ].join(" ");
@@ -273,6 +345,7 @@ async function generateDesignIntentPatchWithArk({ message, designIntent, zone, a
     message,
     zone,
     availableColors,
+    availablePlantTargets,
     currentDesignIntent: designIntent,
   });
 
@@ -280,6 +353,7 @@ async function generateDesignIntentPatchWithArk({ message, designIntent, zone, a
     model: ARK_TEXT_MODEL,
     zone,
     availableColors,
+    availablePlantTargets,
     message,
   });
 
@@ -309,7 +383,7 @@ async function generateDesignIntentPatchWithArk({ message, designIntent, zone, a
   const content = json?.choices?.[0]?.message?.content || "";
   const parsed = extractJsonObject(content);
   return {
-    patch: sanitizeDesignIntentPatch(parsed.patch, availableColors),
+    patch: sanitizeDesignIntentPatch(parsed.patch, availableColors, availablePlantTargets),
     summary: typeof parsed.summary === "string" && parsed.summary.trim() ? parsed.summary.trim() : "Updated the design intent from your request.",
     source: "ark",
   };
@@ -531,16 +605,29 @@ const server = http.createServer(async (req, res) => {
       const availableColors = Array.isArray(body.availableColors)
         ? body.availableColors.filter((item) => typeof item === "string")
         : [];
+      const availablePlantTargets = Array.isArray(body.availablePlantTargets)
+        ? body.availablePlantTargets
+            .filter(
+              (item) =>
+                item &&
+                typeof item === "object" &&
+                typeof item.key === "string" &&
+                typeof item.label === "string"
+            )
+            .map((item) => ({ key: item.key, label: item.label }))
+        : [];
       logInfo("Design intent user command", {
         message,
         zone,
         availableColors,
+        availablePlantTargets,
       });
       const result = await generateDesignIntentPatchWithArk({
         message,
         designIntent,
         zone,
         availableColors,
+        availablePlantTargets,
       });
       logInfo("Design intent assistant feedback", {
         source: result.source,

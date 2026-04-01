@@ -5,6 +5,7 @@ export async function requestDesignIntentPatch(input: {
   designIntent: DesignIntent;
   zone: number;
   availableColors: string[];
+  availablePlantTargets: Array<{ key: string; label: string }>;
 }): Promise<{ patch: DesignIntentPatch; summary: string; source?: string }> {
   const apiBase = ((import.meta.env.VITE_STYLIZE_API_BASE as string | undefined)?.trim() || "").replace(/\/+$/, "");
   const apiBaseRemote = (import.meta.env.VITE_STYLIZE_API_BASE_REMOTE as string | undefined)?.trim() || "";

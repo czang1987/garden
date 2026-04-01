@@ -259,6 +259,7 @@ export default function App() {
   const [viewportWidth, setViewportWidth] = useState(
     typeof window === "undefined" ? 1280 : window.innerWidth
   );
+  const [editorWidth, setEditorWidth] = useState(1280);
   const [garden, setGarden] = useState<GardenState>(createGarden(20, 20));
   const [rowGapRatio, setRowGapRatio] = useState(0.28);
   const [rowsInput, setRowsInput] = useState(garden.rows);
@@ -267,7 +268,6 @@ export default function App() {
   const [categories, setCategories] = useState<PlantCategory[]>([]);
   const [selectedCell, setSelectedCell] = useState<{ r: number; c: number } | null>(null);
   const [editMode, setEditMode] = useState(false);
-  const [frontPaneWidth, setFrontPaneWidth] = useState(960);
   const [catalogPaneWidth, setCatalogPaneWidth] = useState(320);
   const [designIntent, setDesignIntent] = useState<DesignIntent>(DEFAULT_DESIGN_INTENT);
   const [lastDensityBand, setLastDensityBand] = useState<"front" | "middle" | "back" | null>(null);
@@ -370,16 +370,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!frontPaneRef.current) return;
+    if (!editorRef.current) return;
 
     const updateWidth = () => {
-      const nextWidth = Math.max(520, Math.floor(frontPaneRef.current?.clientWidth ?? 960));
-      setFrontPaneWidth(nextWidth);
+      const nextWidth = Math.max(720, Math.floor(editorRef.current?.clientWidth ?? 1280));
+      setEditorWidth((prev) => (prev === nextWidth ? prev : nextWidth));
     };
 
     updateWidth();
     const observer = new ResizeObserver(updateWidth);
-    observer.observe(frontPaneRef.current);
+    observer.observe(editorRef.current);
     return () => observer.disconnect();
   }, []);
 
@@ -388,7 +388,7 @@ export default function App() {
 
     const updateWidth = () => {
       const nextWidth = Math.max(240, Math.floor(catalogPaneRef.current?.clientWidth ?? 320));
-      setCatalogPaneWidth(nextWidth);
+      setCatalogPaneWidth((prev) => (prev === nextWidth ? prev : nextWidth));
     };
 
     updateWidth();
@@ -444,9 +444,13 @@ export default function App() {
     [allVariants, designIntent.layout.symmetry, garden]
   );
 
-  const canvasWidth = Math.max(520, frontPaneWidth - 4);
   const isCompactLayout = viewportWidth < 1100;
   const isPhoneLayout = viewportWidth < 720;
+  const editorGap = isCompactLayout ? 16 : 20;
+  const derivedFrontPaneWidth = isCompactLayout
+    ? editorWidth
+    : Math.max(520, editorWidth - catalogPaneWidth - editorGap);
+  const canvasWidth = Math.max(520, derivedFrontPaneWidth - 4);
   const frameThickness = 36;
   const horizontalPadding = frameThickness * 2 + 48;
   const availableGridWidth = Math.max(160, canvasWidth - horizontalPadding);
@@ -2088,6 +2092,10 @@ export default function App() {
         designIntent,
         zone: garden.zone,
         availableColors,
+        availablePlantTargets: categories.map((category) => ({
+          key: category.id,
+          label: category.categoryName,
+        })),
       });
       const loweredColors = Object.entries(result.patch?.color?.preferences ?? {})
         .filter(([color, nextValue]) => {
@@ -2980,7 +2988,7 @@ export default function App() {
             minWidth: 0,
           }}
         >
-          <div ref={frontPaneRef}>
+          <div ref={frontPaneRef} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
             <div
               style={{
                 marginBottom: 8,
@@ -3276,8 +3284,8 @@ export default function App() {
                 {frontViewMode === "preview" ? (
                   <div
                     style={{
-                      width: canvasWidth,
-                      maxWidth: "100%",
+                      width: "100%",
+                      maxWidth: canvasWidth,
                       minHeight: 420,
                       borderRadius: 16,
                       overflow: "hidden",

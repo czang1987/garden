@@ -884,7 +884,7 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
   }, [appReady, baseX, baseY, canvasH, canvasWidth, colGap, garden, gridH, gridW, monetMode, rowGap, selectedCell, showEditGrid, symmetryHints, textureMap, variantMap]);
 
   return (
-    <div ref={mountRef} style={{ width: canvasWidth, minHeight: canvasH, position: "relative" }}>
+    <div ref={mountRef} style={{ width: "100%", maxWidth: canvasWidth, minHeight: canvasH, position: "relative" }}>
       {hoverPlant ? (
         <div
           style={{
