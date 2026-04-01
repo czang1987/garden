@@ -3346,7 +3346,7 @@ export default function App() {
                   minHeight: isPhoneLayout ? undefined : 420,
                 }}
               >
-                {isPhoneLayout ? (
+                {isCompactLayout ? (
                   <input
                     type="range"
                     min={0.15}
