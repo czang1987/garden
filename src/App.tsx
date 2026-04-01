@@ -447,8 +447,9 @@ export default function App() {
   const isCompactLayout = viewportWidth < 1100;
   const isPhoneLayout = viewportWidth < 720;
   const editorGap = isCompactLayout ? 16 : 20;
+  const compactViewportWidth = Math.max(320, viewportWidth - 32);
   const derivedFrontPaneWidth = isCompactLayout
-    ? editorWidth
+    ? compactViewportWidth
     : Math.max(520, editorWidth - catalogPaneWidth - editorGap);
   const canvasWidth = Math.max(520, derivedFrontPaneWidth - 4);
   const frameThickness = 36;
@@ -3359,9 +3360,11 @@ export default function App() {
                   <div
                     style={{
                       width: 34,
-                      height: "100%",
-                      position: "relative",
-                      overflow: "visible",
+                      height: 420,
+                      display: "flex",
+                      alignItems: "stretch",
+                      justifyContent: "center",
+                      overflow: "hidden",
                     }}
                   >
                     <input
@@ -3372,13 +3375,13 @@ export default function App() {
                       value={rowGapRatio}
                       onChange={(e) => setRowGapRatio(Number(e.target.value))}
                       style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 17,
-                        width: 420,
+                        width: "100%",
+                        height: "100%",
                         margin: 0,
-                        transform: "rotate(-90deg) translateX(-100%)",
-                        transformOrigin: "top left",
+                        writingMode: "vertical-lr",
+                        WebkitAppearance: "slider-vertical",
+                        appearance: "auto",
+                        direction: "rtl",
                       }}
                     />
                   </div>
