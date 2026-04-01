@@ -2747,7 +2747,7 @@ export default function App() {
   const activeTutorial = tutorialSteps[tutorialStep] ?? tutorialSteps[0];
 
   return (
-    <div style={{ padding: 16, maxWidth: 1800, margin: "0 auto" }}>
+    <div style={{ padding: 16, maxWidth: 1800, margin: "0 auto", width: "100%", boxSizing: "border-box", overflowX: "clip" }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <div
           style={{
@@ -2980,6 +2980,10 @@ export default function App() {
           flexDirection: isCompactLayout ? "column" : "row",
           gap: isCompactLayout ? 16 : 20,
           alignItems: "flex-start",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          overflowX: "clip",
         }}
       >
         <div
@@ -2987,9 +2991,13 @@ export default function App() {
           style={{
             flex: "1 1 auto",
             minWidth: 0,
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            overflowX: "clip",
           }}
         >
-          <div ref={frontPaneRef} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
+          <div ref={frontPaneRef} style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box", overflowX: "clip" }}>
             <div
               style={{
                 marginBottom: 8,
@@ -3399,9 +3407,12 @@ export default function App() {
             position: isCompactLayout ? "static" : "sticky",
             top: isCompactLayout ? undefined : 16,
             alignSelf: "flex-start",
+            minWidth: 0,
+            maxWidth: "100%",
+            boxSizing: "border-box",
           }}
         >
-          <div style={{ width: "100%" }}>
+          <div style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: isPhoneLayout ? "wrap" : "nowrap" }}>
               <button
                 onClick={() => setRightPanel("catalog")}
