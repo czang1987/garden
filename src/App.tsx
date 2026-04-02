@@ -323,6 +323,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const exportToolsRef = useRef<HTMLDivElement | null>(null);
+  const tutorialExportControlsRef = useRef<HTMLDivElement | null>(null);
   const frontEditorRef = useRef<HTMLDivElement | null>(null);
   const autoPanelRef = useRef<HTMLDivElement | null>(null);
   const catalogPanelRef = useRef<HTMLDivElement | null>(null);
@@ -2687,7 +2688,7 @@ export default function App() {
     }
 
     const resolveTarget = () => {
-      if (tutorialStep === 0) return exportToolsRef.current;
+      if (tutorialStep === 0) return tutorialExportControlsRef.current ?? exportToolsRef.current;
       if (tutorialStep === 1) return autoPanelRef.current;
       if (tutorialStep === 2) return frontEditorRef.current;
       if (tutorialStep === 3) return catalogPanelRef.current;
@@ -3110,6 +3111,7 @@ export default function App() {
                 </button>
                 </div>
                 <div
+                  ref={tutorialExportControlsRef}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
