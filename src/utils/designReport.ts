@@ -197,7 +197,7 @@ export function buildDesignReportHtml(params: {
     <section class="page">
       <h1>${escapeHtml(title)}</h1>
       <div class="meta">
-        <div>Grid: ${garden.rows} x ${garden.cols} ft</div>
+        <div>Dimensions: Depth ${garden.rows} ft x Width ${garden.cols} ft</div>
         <div>Season: ${escapeHtml(garden.season)}</div>
         <div>Zone: ${garden.zone}</div>
       </div>

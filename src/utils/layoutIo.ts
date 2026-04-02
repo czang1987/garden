@@ -85,7 +85,7 @@ export function formatLayoutFileAsReadableText(layout: LayoutFile): string {
   lines.push("Garden Layout Export");
   lines.push("==================");
   lines.push(`Exported At: ${layout.exportedAt}`);
-  lines.push(`Grid: ${layout.rows} x ${layout.cols}`);
+  lines.push(`Dimensions: Depth ${layout.rows} ft x Width ${layout.cols} ft`);
   lines.push(`Season: ${layout.season}`);
   lines.push(`Zone: ${layout.zone}`);
   lines.push("");
@@ -100,7 +100,7 @@ export function formatLayoutFileAsReadableText(layout: LayoutFile): string {
   lines.push("Placements");
   lines.push("----------");
   for (const p of layout.placements) {
-    lines.push(`- ${p.plantName} (${p.plantId}) @ row=${p.row}, col=${p.col}`);
+    lines.push(`- ${p.plantName} (${p.plantId}) @ depth=${p.row}ft, width=${p.col}ft`);
     lines.push(`  Purchase URL: ${p.purchaseUrl || "-"}`);
   }
   return lines.join("\n");
@@ -112,25 +112,29 @@ export function parseReadableTextToLayoutFile(text: string): LayoutFile {
     lines.find((l) => l.toLowerCase().startsWith(prefix.toLowerCase()))?.slice(prefix.length).trim() ?? "";
 
   const exportedAt = get("Exported At:") || new Date().toISOString();
+  const dimensions = get("Dimensions:");
   const grid = get("Grid:");
   const seasonRaw = get("Season:");
   const zoneRaw = get("Zone:");
-  const gridMatch = grid.match(/(\d+)\s*x\s*(\d+)/i);
+  const gridSource = dimensions || grid;
+  const gridMatch =
+    gridSource.match(/Depth\s*(\d+)\s*ft\s*x\s*Width\s*(\d+)\s*ft/i) ??
+    gridSource.match(/(\d+)\s*x\s*(\d+)/i);
   const rows = gridMatch ? Number(gridMatch[1]) : 1;
   const cols = gridMatch ? Number(gridMatch[2]) : 1;
   const season: Season = isSeason(seasonRaw) ? seasonRaw : "spring";
   const zone = toInt(zoneRaw, 6);
 
   const placements: LayoutPlacement[] = [];
-  const placeRegex = /^-\s+(.+?)\s+\(([^)]+)\)\s+@\s+row\s*=\s*(\d+)\s*,\s*col\s*=\s*(\d+)/i;
+  const placeRegex = /^-\s+(.+?)\s+\(([^)]+)\)\s+@\s+(?:row\s*=\s*(\d+)\s*,\s*col\s*=\s*(\d+)|depth\s*=\s*(\d+)\s*ft\s*,\s*width\s*=\s*(\d+)\s*ft)$/i;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const m = line.match(placeRegex);
     if (!m) continue;
     const plantName = m[1].trim();
     const plantId = m[2].trim();
-    const row = Number(m[3]);
-    const col = Number(m[4]);
+    const row = Number(m[3] ?? m[5]);
+    const col = Number(m[4] ?? m[6]);
     let purchaseUrl = "";
     const next = lines[i + 1] ?? "";
     const u = next.match(/^Purchase URL:\s*(.*)$/i);

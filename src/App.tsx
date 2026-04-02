@@ -322,7 +322,6 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
-  const exportToolsRef = useRef<HTMLDivElement | null>(null);
   const tutorialExportControlsRef = useRef<HTMLDivElement | null>(null);
   const frontEditorRef = useRef<HTMLDivElement | null>(null);
   const autoPanelRef = useRef<HTMLDivElement | null>(null);
@@ -2688,7 +2687,7 @@ export default function App() {
     }
 
     const resolveTarget = () => {
-      if (tutorialStep === 0) return tutorialExportControlsRef.current ?? exportToolsRef.current;
+      if (tutorialStep === 0) return tutorialExportControlsRef.current;
       if (tutorialStep === 1) return autoPanelRef.current;
       if (tutorialStep === 2) return frontEditorRef.current;
       if (tutorialStep === 3) return catalogPanelRef.current;
@@ -2752,73 +2751,14 @@ export default function App() {
 
   return (
     <div style={{ padding: 16, maxWidth: 1800, margin: "0 auto", width: "100%", boxSizing: "border-box", overflowX: "clip" }}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <div
-          style={{
-            display: "inline-flex",
-            gap: 8,
-            alignItems: "center",
-            flexWrap: "wrap",
-            padding: "8px 10px",
-            borderRadius: 12,
-            background: "#faf7f1",
-            border: "1px solid #e2ddd2",
-          }}
-        >
-          <label>
-            Rows:
-            <input
-              type="number"
-              min={1}
-              value={rowsInput}
-              onChange={(e) => setRowsInput(Number(e.target.value))}
-              style={{ width: 70, marginLeft: 6 }}
-            />
-          </label>
-          <label>
-            Cols:
-            <input
-              type="number"
-              min={1}
-              value={colsInput}
-              onChange={(e) => setColsInput(Number(e.target.value))}
-              style={{ width: 70, marginLeft: 6 }}
-            />
-          </label>
-          <label>
-            Zone:
-            <input
-              type="number"
-              min={1}
-              max={13}
-              value={zoneInput}
-              onChange={(e) => setZoneInput(Number(e.target.value))}
-              style={{ width: 70, marginLeft: 6 }}
-            />
-          </label>
-          <button onClick={applySize}>应用</button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".txt,.html,.htm,text/plain,text/html"
-            onChange={onImportFile}
-            style={{ display: "none" }}
-          />
-        </div>
-        <div
-          ref={exportToolsRef}
-          style={{
-            display: "inline-flex",
-            gap: 8,
-            alignItems: "center",
-            flexWrap: "wrap",
-            padding: "8px 10px",
-            borderRadius: 12,
-            background: "#f5f8f2",
-            border: "1px solid #d7e2d1",
-          }}
-        >
-        </div>
+      <div style={{ marginBottom: 12 }}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".txt,.html,.htm,text/plain,text/html"
+          onChange={onImportFile}
+          style={{ display: "none" }}
+        />
       </div>
 
       {reportViewsActive ? (
@@ -3022,17 +2962,25 @@ export default function App() {
                   onClick={restorePreviousStep}
                   disabled={!canUndo}
                   title={canUndo ? `恢复到上一步布局与参数（剩余 ${undoDepth} 步，Ctrl/Cmd + Z）` : "当前没有可撤回的更改"}
+                  aria-label="退回上一步"
                   style={{
-                    padding: "6px 12px",
+                    width: 34,
+                    height: 34,
+                    padding: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     borderRadius: 999,
                     border: "1px solid #cdbdb3",
                     background: canUndo ? "#f6f1e8" : "#f2ede7",
                     color: canUndo ? "#5e4c3c" : "#9b9185",
-                    whiteSpace: "nowrap",
                     cursor: canUndo ? "pointer" : "not-allowed",
                   }}
                 >
-                  退回上一步
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M6.5 3.5 2.5 7.5l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M3 7.5h5.25a4.25 4.25 0 0 1 0 8.5H7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </button>
                 <button
                   type="button"
@@ -3043,33 +2991,52 @@ export default function App() {
                       ? `恢复刚才撤回的步骤（剩余 ${redoDepth} 步，Ctrl+Y / Cmd/Ctrl + Shift + Z）`
                       : "当前没有可重做的更改"
                   }
+                  aria-label="重做"
                   style={{
-                    padding: "6px 12px",
+                    width: 34,
+                    height: 34,
+                    padding: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     borderRadius: 999,
                     border: "1px solid #cdbdb3",
                     background: canRedo ? "#f6f1e8" : "#f2ede7",
                     color: canRedo ? "#5e4c3c" : "#9b9185",
-                    whiteSpace: "nowrap",
                     cursor: canRedo ? "pointer" : "not-allowed",
                   }}
                 >
-                  重做
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="m9.5 3.5 4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M13 7.5H7.75a4.25 4.25 0 0 0 0 8.5H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </button>
                 <button
                   type="button"
                   onClick={() => choosePlant(null)}
                   disabled={!selectedPlantAnchor}
+                  title={selectedPlantAnchor ? "删除当前选中的植物" : "请先选中一个植物再删除"}
+                  aria-label="删除植物"
                   style={{
-                    padding: "6px 12px",
+                    width: 34,
+                    height: 34,
+                    padding: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     borderRadius: 999,
                     border: "1px solid #cdbdb3",
                     background: selectedPlantAnchor ? "#fff7f3" : "#f2ede7",
                     color: selectedPlantAnchor ? "#7f4a36" : "#9b9185",
-                    whiteSpace: "nowrap",
                     cursor: selectedPlantAnchor ? "pointer" : "not-allowed",
                   }}
                 >
-                  删除植物
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M3.5 4.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    <path d="M6 2.75h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    <path d="M5 4.5v7.25c0 .41.34.75.75.75h4.5c.41 0 .75-.34.75-.75V4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M6.75 6.5v4M9.25 6.5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
                 </button>
                 <div
                   style={{
@@ -3212,54 +3179,121 @@ export default function App() {
                       </button>
                     </>
                   ) : null}
-                  <button
-                    onClick={exportFrontViewPng}
-                    disabled={isStylizingFrontView}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: 999,
-                      border: "1px solid #cdbdb3",
-                      background: isStylizingFrontView ? "#f2ede7" : "#f6f1e8",
-                      color: isStylizingFrontView ? "#9b9185" : "#5e4c3c",
-                      whiteSpace: "nowrap",
-                      cursor: isStylizingFrontView ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {isStylizingFrontView ? "正在生成风格图..." : "导出效果图"}
-                  </button>
-                  <button
-                    onClick={exportTrainingAssets}
-                    disabled={isExportingTrainingAssets || isExportingReport || isStylizingFrontView}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: 999,
-                      border: "1px solid #cdbdb3",
-                      background:
-                        isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "#f2ede7" : "#f6f1e8",
-                      color:
-                        isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "#9b9185" : "#5e4c3c",
-                      whiteSpace: "nowrap",
-                      cursor:
-                        isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {isExportingTrainingAssets ? "正在生成训练素材..." : "生成训练素材"}
-                  </button>
-                  <button
-                    onClick={exportDesignReport}
-                    disabled={isExportingReport}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: 999,
-                      border: "1px solid #cdbdb3",
-                      background: isExportingReport ? "#f2ede7" : "#f6f1e8",
-                      color: isExportingReport ? "#9b9185" : "#5e4c3c",
-                      whiteSpace: "nowrap",
-                      cursor: isExportingReport ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
-                  </button>
+                  <details style={{ position: "relative" }}>
+                    <summary
+                      style={{
+                        listStyle: "none",
+                        padding: "6px 12px",
+                        borderRadius: 999,
+                        border: "1px solid #cdbdb3",
+                        background: "#f6f1e8",
+                        color: "#5e4c3c",
+                        whiteSpace: "nowrap",
+                        cursor: "pointer",
+                        userSelect: "none",
+                      }}
+                    >
+                      导出 ▾
+                    </summary>
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 8px)",
+                        right: 0,
+                        minWidth: 188,
+                        padding: 8,
+                        borderRadius: 12,
+                        border: "1px solid #ddd5c8",
+                        background: "#fffdf8",
+                        boxShadow: "0 10px 28px rgba(56, 47, 39, 0.12)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                        zIndex: 20,
+                      }}
+                    >
+                      <button
+                        onClick={exportFrontViewPng}
+                        disabled={isStylizingFrontView}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 10,
+                          border: "1px solid #e0d5c8",
+                          background: isStylizingFrontView ? "#f2ede7" : "#fff",
+                          color: isStylizingFrontView ? "#9b9185" : "#5e4c3c",
+                          textAlign: "left",
+                          cursor: isStylizingFrontView ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {isStylizingFrontView ? "正在生成风格图..." : "导出效果图"}
+                      </button>
+                      <button
+                        onClick={exportTrainingAssets}
+                        disabled={isExportingTrainingAssets || isExportingReport || isStylizingFrontView}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 10,
+                          border: "1px solid #e0d5c8",
+                          background:
+                            isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "#f2ede7" : "#fff",
+                          color:
+                            isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "#9b9185" : "#5e4c3c",
+                          textAlign: "left",
+                          cursor:
+                            isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {isExportingTrainingAssets ? "正在生成训练素材..." : "生成训练素材"}
+                      </button>
+                      <button
+                        onClick={exportDesignReport}
+                        disabled={isExportingReport}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 10,
+                          border: "1px solid #e0d5c8",
+                          background: isExportingReport ? "#f2ede7" : "#fff",
+                          color: isExportingReport ? "#9b9185" : "#5e4c3c",
+                          textAlign: "left",
+                          cursor: isExportingReport ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
+                      </button>
+                    </div>
+                  </details>
+                  <label>
+                    Depth (ft):
+                    <input
+                      type="number"
+                      min={1}
+                      value={rowsInput}
+                      onChange={(e) => setRowsInput(Number(e.target.value))}
+                      style={{ width: 70, marginLeft: 6 }}
+                    />
+                  </label>
+                  <label>
+                    Width (ft):
+                    <input
+                      type="number"
+                      min={1}
+                      value={colsInput}
+                      onChange={(e) => setColsInput(Number(e.target.value))}
+                      style={{ width: 70, marginLeft: 6 }}
+                    />
+                  </label>
+                  <label>
+                    Zone:
+                    <input
+                      type="number"
+                      min={1}
+                      max={13}
+                      value={zoneInput}
+                      onChange={(e) => setZoneInput(Number(e.target.value))}
+                      style={{ width: 70, marginLeft: 6 }}
+                    />
+                  </label>
+                  <button onClick={applySize}>应用</button>
                 </div>
               </div>
             </div>
@@ -3460,7 +3494,7 @@ export default function App() {
             {rightPanel === "catalog" ? (
               <div ref={catalogPanelRef}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
-                  {selectedCell ? `选中位置: (${selectedCell.r}, ${selectedCell.c})` : "请选择一个格子"}
+                  {selectedCell ? `选中位置: Depth ${selectedCell.r} ft, Width ${selectedCell.c} ft` : "请选择一个格子"}
                 </div>
                 {categories.length > 0 ? (
                   <PlantCatalog
