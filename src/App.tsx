@@ -444,14 +444,17 @@ export default function App() {
     [allVariants, designIntent.layout.symmetry, garden]
   );
 
-  const isCompactLayout = viewportWidth < 1100;
+  const isCompactLayout = viewportWidth < 1400;
   const isPhoneLayout = viewportWidth < 720;
   const editorGap = isCompactLayout ? 16 : 20;
   const compactViewportWidth = Math.max(320, viewportWidth - 32);
+  const desktopSidebarWidth = 430;
   const derivedFrontPaneWidth = isCompactLayout
     ? compactViewportWidth
-    : Math.max(520, editorWidth - catalogPaneWidth - editorGap);
-  const canvasWidth = Math.max(520, derivedFrontPaneWidth - 4);
+    : Math.max(420, editorWidth - desktopSidebarWidth - editorGap);
+  const canvasWidth = isCompactLayout
+    ? Math.max(360, derivedFrontPaneWidth - 4)
+    : Math.max(420, Math.min(1380, derivedFrontPaneWidth - 16));
   const frameThickness = 36;
   const horizontalPadding = frameThickness * 2 + 48;
   const availableGridWidth = Math.max(160, canvasWidth - horizontalPadding);
@@ -2976,8 +2979,8 @@ export default function App() {
       <div
         ref={editorRef}
         style={{
-          display: "flex",
-          flexDirection: isCompactLayout ? "column" : "row",
+          display: "grid",
+          gridTemplateColumns: isCompactLayout ? "minmax(0, 1fr)" : "minmax(0, 1fr) minmax(340px, 430px)",
           gap: isCompactLayout ? 16 : 20,
           alignItems: "flex-start",
           width: "100%",
@@ -2989,7 +2992,6 @@ export default function App() {
         <div
           ref={frontEditorRef}
           style={{
-            flex: "1 1 auto",
             minWidth: 0,
             width: "100%",
             maxWidth: "100%",
@@ -3262,12 +3264,12 @@ export default function App() {
             <div
               style={{
                 display: "flex",
-                flexDirection: isPhoneLayout ? "column" : "row",
+                flexDirection: "column",
                 alignItems: "flex-start",
-                gap: isPhoneLayout ? 10 : 14,
+                gap: 10,
               }}
             >
-              <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+              <div style={{ flex: "1 1 auto", minWidth: 0, width: "100%", position: "relative" }}>
                 <div style={{ display: frontViewMode === "edit" ? "block" : "none" }}>
                   <FrontView
                     ref={frontViewRef}
@@ -3290,6 +3292,41 @@ export default function App() {
                     onTextureLoadProgressChange={setFrontViewTextureLoadProgress}
                   />
                 </div>
+                {!isCompactLayout ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      right: 6,
+                      width: 28,
+                      height: 420,
+                      display: "flex",
+                      alignItems: "stretch",
+                      justifyContent: "center",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <input
+                      type="range"
+                      min={0.15}
+                      max={1}
+                      step={0.01}
+                      value={rowGapRatio}
+                      onChange={(e) => setRowGapRatio(Number(e.target.value))}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        margin: 0,
+                        writingMode: "vertical-lr",
+                        WebkitAppearance: "slider-vertical",
+                        appearance: "auto",
+                        direction: "rtl",
+                        pointerEvents: "auto",
+                        opacity: 0.92,
+                      }}
+                    />
+                  </div>
+                ) : null}
                 {frontViewMode === "preview" ? (
                   <div
                     style={{
@@ -3341,20 +3378,8 @@ export default function App() {
                   </div>
                 ) : null}
               </div>
-              <div
-                style={{
-                  flex: "0 0 auto",
-                  display: "flex",
-                  flexDirection: isPhoneLayout ? "row" : "column",
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  gap: 10,
-                  alignSelf: "flex-start",
-                  padding: isPhoneLayout ? "4px 0" : "0 2px",
-                  minHeight: isPhoneLayout ? undefined : 420,
-                }}
-              >
-                {isCompactLayout ? (
+              {isCompactLayout ? (
+                <div style={{ width: "100%", paddingTop: 4 }}>
                   <input
                     type="range"
                     min={0.15}
@@ -3364,37 +3389,8 @@ export default function App() {
                     onChange={(e) => setRowGapRatio(Number(e.target.value))}
                     style={{ width: "100%", minWidth: 180 }}
                   />
-                ) : (
-                  <div
-                    style={{
-                      width: 34,
-                      height: 420,
-                      display: "flex",
-                      alignItems: "stretch",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <input
-                      type="range"
-                      min={0.15}
-                      max={1}
-                      step={0.01}
-                      value={rowGapRatio}
-                      onChange={(e) => setRowGapRatio(Number(e.target.value))}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        margin: 0,
-                        writingMode: "vertical-lr",
-                        WebkitAppearance: "slider-vertical",
-                        appearance: "auto",
-                        direction: "rtl",
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -3402,8 +3398,7 @@ export default function App() {
         <div
           ref={catalogPaneRef}
           style={{
-            flex: isCompactLayout ? "1 1 auto" : "0 0 clamp(260px, 18vw, 340px)",
-            width: isCompactLayout ? "100%" : "clamp(260px, 18vw, 340px)",
+            width: "100%",
             position: isCompactLayout ? "static" : "sticky",
             top: isCompactLayout ? undefined : 16,
             alignSelf: "flex-start",
@@ -3413,7 +3408,7 @@ export default function App() {
           }}
         >
           <div style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: isPhoneLayout ? "wrap" : "nowrap" }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
               <button
                 onClick={() => setRightPanel("catalog")}
                 style={{
@@ -3498,6 +3493,7 @@ export default function App() {
                 ref={autoPanelRef}
                 style={{
                   width: "100%",
+                  minWidth: 0,
                   border: "1px solid #e2ddd2",
                   borderRadius: 14,
                   background: "#faf7f1",
@@ -3505,6 +3501,8 @@ export default function App() {
                   color: "#766a58",
                   fontSize: 13,
                   lineHeight: 1.7,
+                  boxSizing: "border-box",
+                  overflowX: "hidden",
                 }}
               >
                 <div
@@ -3514,6 +3512,7 @@ export default function App() {
                     justifyContent: "space-between",
                     gap: 12,
                     marginBottom: 12,
+                    flexWrap: "wrap",
                   }}
                 >
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#2f3d2f" }}>
@@ -3569,8 +3568,8 @@ export default function App() {
                       marginBottom: 8,
                     }}
                   />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                    <div style={{ fontSize: 12, color: "#6e665b", lineHeight: 1.5 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 12, color: "#6e665b", lineHeight: 1.5, flex: "1 1 180px", minWidth: 0 }}>
                       AI 先修改设计参数，你再决定是否自动生成布局。
                     </div>
                     <button
@@ -3617,11 +3616,11 @@ export default function App() {
                     </div>
                   ) : null}
                 </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
                   <button
                     onClick={autoGenerate}
                     disabled={allVariants.length === 0 || isGeneratingLayout}
-                    style={{ flex: "1 1 auto", padding: "10px 12px", borderRadius: 10 }}
+                    style={{ flex: "1 1 180px", padding: "10px 12px", borderRadius: 10 }}
                   >
                     {isCatalogLoading
                       ? "正在加载植物库..."
@@ -3632,7 +3631,7 @@ export default function App() {
                   <button
                     onClick={confirmClearAllPlants}
                     style={{
-                      flex: "0 0 auto",
+                      flex: "1 1 120px",
                       padding: "10px 10px",
                       borderRadius: 10,
                       background: "#6a5a49",
