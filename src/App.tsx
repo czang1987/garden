@@ -243,6 +243,16 @@ function ColorDotSelect({
   );
 }
 
+function getCategoryDisplayName(categoryId?: string, fallback?: string) {
+  const map: Record<string, string> = {
+    shrubs: "灌木",
+    perennials: "多年生",
+    annuals: "一年生",
+    grasses: "观赏草",
+  };
+  return (categoryId && map[categoryId]) || fallback || categoryId || "";
+}
+
 export default function App() {
   type UndoSnapshot = {
     garden: GardenState;
@@ -404,7 +414,7 @@ export default function App() {
         ...cat.variants.map((variant) => ({
           ...variant,
           categoryId: cat.id,
-          categoryName: cat.name,
+          categoryName: getCategoryDisplayName(cat.id, cat.name),
           boundary:
             variant.boundary ??
             (/\bboxwood\b/i.test(variant.id) ||
@@ -444,8 +454,11 @@ export default function App() {
     [allVariants, designIntent.layout.symmetry, garden]
   );
 
-  const isCompactLayout = viewportWidth < 1400;
+  const isCompactLayout = viewportWidth < 960;
   const isPhoneLayout = viewportWidth < 720;
+  useEffect(() => {
+    console.log("[layout] viewportWidth =", viewportWidth);
+  }, [viewportWidth]);
   const editorGap = isCompactLayout ? 16 : 20;
   const compactViewportWidth = Math.max(320, viewportWidth - 32);
   const desktopSidebarWidth = 430;
@@ -2098,7 +2111,7 @@ export default function App() {
         availableColors,
         availablePlantTargets: categories.map((category) => ({
           key: category.id,
-          label: category.categoryName,
+          label: getCategoryDisplayName(category.id, category.name),
         })),
       });
       const loweredColors = Object.entries(result.patch?.color?.preferences ?? {})
@@ -2227,10 +2240,12 @@ export default function App() {
       setExportProgressText("正在准备四季 FrontView 原图...");
       setExportProgressValue(12);
       await new Promise((resolve) => window.setTimeout(resolve, 0));
-      const rawSeasonalViews = await waitForReportFrontViews();
 
-      for (let i = 0; i < rawSeasonalViews.length; i++) {
-        const view = rawSeasonalViews[i];
+      for (let i = 0; i < reportSeasons.length; i++) {
+        const season = reportSeasons[i];
+        setExportProgressText(`正在等待 ${season} 季植物加载完成（${i + 1}/${reportSeasons.length}）...`);
+        setExportProgressValue(12 + Math.round((i / reportSeasons.length) * 10));
+        const view = await waitForReportFrontView(season);
         const seasonBaseName = `${stamp}-${view.season}`;
 
         setExportProgressText(`正在写入 ${view.season} 原图（${i + 1}/${rawSeasonalViews.length}）...`);
@@ -2383,25 +2398,32 @@ export default function App() {
     }
   }
 
-  async function waitForReportFrontViews(timeoutMs = 15000) {
+  function getReportFrontViewRef(season: Season) {
+    return season === "spring"
+      ? springFrontalReportFrontViewRef
+      : season === "summer"
+        ? summerFrontalReportFrontViewRef
+        : season === "autumn"
+          ? autumnFrontalReportFrontViewRef
+          : winterFrontalReportFrontViewRef;
+  }
+
+  async function waitForReportFrontView(season: Season, timeoutMs = 15000) {
     const startedAt = Date.now();
 
     while (Date.now() - startedAt < timeoutMs) {
-      const rawSeasonalViews = [
-        { season: "spring" as Season, frontalPng: springFrontalReportFrontViewRef.current?.exportPng() ?? "" },
-        { season: "summer" as Season, frontalPng: summerFrontalReportFrontViewRef.current?.exportPng() ?? "" },
-        { season: "autumn" as Season, frontalPng: autumnFrontalReportFrontViewRef.current?.exportPng() ?? "" },
-        { season: "winter" as Season, frontalPng: winterFrontalReportFrontViewRef.current?.exportPng() ?? "" },
-      ];
+      const ref = getReportFrontViewRef(season).current;
+      const frontalPng = ref?.exportPng() ?? "";
+      const ready = ref?.isReadyForExport() ?? false;
 
-      if (rawSeasonalViews.every((view) => !!view.frontalPng)) {
-        return rawSeasonalViews;
+      if (frontalPng && ready) {
+        return { season, frontalPng };
       }
 
       await new Promise((resolve) => window.setTimeout(resolve, 250));
     }
 
-    throw new Error("四季 FrontView 还没有准备好，请稍等后再试。");
+    throw new Error(`${season} 季 FrontView 还没有准备好，请稍等后再试。`);
   }
 
   async function exportDesignReport() {
@@ -2412,15 +2434,16 @@ export default function App() {
     setExportProgressValue(10);
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     try {
-      const rawSeasonalViews = await waitForReportFrontViews();
+      let seasonalViews: Array<{ season: Season; frontalPng: string }> = [];
+      for (let i = 0; i < reportSeasons.length; i++) {
+        const season = reportSeasons[i];
+        setExportProgressText(`正在等待 ${season} 季植物加载完成（${i + 1}/${reportSeasons.length}）...`);
+        setExportProgressValue(10 + Math.round((i / reportSeasons.length) * 12));
+        const view = await waitForReportFrontView(season);
 
-      let seasonalViews = rawSeasonalViews;
-      if (frontViewExportStyle !== "download") {
-        seasonalViews = [];
-        for (let i = 0; i < rawSeasonalViews.length; i++) {
-          const view = rawSeasonalViews[i];
-          setExportProgressText(`正在生成 ${view.season} 风格图（${i + 1}/${rawSeasonalViews.length}）...`);
-          setExportProgressValue(15 + Math.round(((i + 1) / rawSeasonalViews.length) * 60));
+        if (frontViewExportStyle !== "download") {
+          setExportProgressText(`正在生成 ${view.season} 风格图（${i + 1}/${reportSeasons.length}）...`);
+          setExportProgressValue(15 + Math.round(((i + 1) / reportSeasons.length) * 60));
           let stylized;
           try {
             stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle, {
@@ -2434,9 +2457,10 @@ export default function App() {
             ...view,
             frontalPng: stylized.imageDataUrl,
           });
+        } else {
+          seasonalViews.push(view);
+          setExportProgressValue(55);
         }
-      } else {
-        setExportProgressValue(55);
       }
 
       setExportProgressText("正在生成植物清单和布局说明...");

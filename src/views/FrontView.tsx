@@ -43,6 +43,7 @@ type HoverPlant = {
 
 export type FrontViewHandle = {
   exportPng: () => string | null;
+  isReadyForExport: () => boolean;
 };
 
 type FrontViewProps = {
@@ -136,6 +137,7 @@ async function loadPlantTexturesForSeason(
   onProgress?.(loaded, total);
   const entries = await Promise.all(
     uniquePlantIds.map(async (plantId) => {
+      console.log(`[frontview] loading plant texture ${plantId}/${season} (${loaded + 1}/${total})`);
       const texture = await loadPlantTexture(plantId, season);
       loaded += 1;
       onProgress?.(loaded, total);
@@ -518,8 +520,18 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
         const canvas = appRef.current?.canvas;
         return canvas instanceof HTMLCanvasElement ? canvas.toDataURL("image/png") : null;
       },
+      isReadyForExport: () => {
+        if (!appReady) return false;
+        if (variantMap.size === 0) return false;
+        if (textureLoadProgress) return false;
+        for (const cell of garden.cells) {
+          if (!cell.plant || cell.plant === "empty") continue;
+          if (!textureMap.has(cell.plant)) return false;
+        }
+        return true;
+      },
     }),
-    []
+    [appReady, garden.cells, textureLoadProgress, textureMap, variantMap]
   );
 
   useEffect(() => {
