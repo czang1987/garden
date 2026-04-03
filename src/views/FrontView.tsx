@@ -44,6 +44,13 @@ type HoverPlant = {
 export type FrontViewHandle = {
   exportPng: () => string | null;
   isReadyForExport: () => boolean;
+  getExportStatus: () => {
+    appReady: boolean;
+    variantMapReady: boolean;
+    textureLoading: boolean;
+    renderReady: boolean;
+    missingTextures: number;
+  };
 };
 
 type FrontViewProps = {
@@ -501,6 +508,7 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
   const [variantMap, setVariantMap] = useState<Map<string, PlantVariant>>(new Map());
   const [textureMap, setTextureMap] = useState<Map<string, PIXI.Texture>>(new Map());
   const [textureLoadProgress, setTextureLoadProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [renderReady, setRenderReady] = useState(false);
   const defaultBaseY = Math.max(80, Math.round(colGap * 0.9));
   const [layoutMetrics, setLayoutMetrics] = useState<LayoutMetrics>(() => ({
     baseY: defaultBaseY,
@@ -518,20 +526,40 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     () => ({
       exportPng: () => {
         const canvas = appRef.current?.canvas;
+        const app = appRef.current;
+        const scene = sceneRef.current;
+        if (app && scene) {
+          app.renderer.render(scene);
+        }
         return canvas instanceof HTMLCanvasElement ? canvas.toDataURL("image/png") : null;
       },
       isReadyForExport: () => {
         if (!appReady) return false;
         if (variantMap.size === 0) return false;
         if (textureLoadProgress) return false;
+        if (!renderReady) return false;
         for (const cell of garden.cells) {
           if (!cell.plant || cell.plant === "empty") continue;
           if (!textureMap.has(cell.plant)) return false;
         }
         return true;
       },
+      getExportStatus: () => {
+        let missingTextures = 0;
+        for (const cell of garden.cells) {
+          if (!cell.plant || cell.plant === "empty") continue;
+          if (!textureMap.has(cell.plant)) missingTextures += 1;
+        }
+        return {
+          appReady,
+          variantMapReady: variantMap.size > 0,
+          textureLoading: !!textureLoadProgress,
+          renderReady,
+          missingTextures,
+        };
+      },
     }),
-    [appReady, garden.cells, textureLoadProgress, textureMap, variantMap]
+    [appReady, garden.cells, renderReady, textureLoadProgress, textureMap, variantMap]
   );
 
   useEffect(() => {
@@ -555,11 +583,13 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     if (uniqueCount === 0) {
       setTextureMap(new Map());
       setTextureLoadProgress(null);
+      setRenderReady(false);
       onTextureLoadProgressChange?.(null);
       return;
     }
 
     (async () => {
+      setRenderReady(false);
       setTextureLoadProgress({ loaded: 0, total: uniqueCount });
       onTextureLoadProgressChange?.({ loaded: 0, total: uniqueCount });
       const nextTextureMap = await loadPlantTexturesForSeason(
@@ -757,6 +787,7 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     if (variantMap.size === 0) return;
 
     let canceled = false;
+    setRenderReady(false);
 
     (async () => {
       scene.removeChildren();
@@ -888,10 +919,16 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
 
       addPaperOverlay(scene, canvasWidth, canvasH);
       scene.sortChildren();
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+      if (!canceled) {
+        setRenderReady(true);
+      }
     })();
 
     return () => {
       canceled = true;
+      setRenderReady(false);
     };
   }, [appReady, baseX, baseY, canvasH, canvasWidth, colGap, garden, gridH, gridW, monetMode, rowGap, selectedCell, showEditGrid, symmetryHints, textureMap, variantMap]);
 

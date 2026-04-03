@@ -483,10 +483,11 @@ export default function App() {
   }
 
   const frontalMetrics = useMemo(() => computeViewMetrics(reportCanvasWidth, 0.22), [garden.cols]);
-  const reportSeasons = useMemo(() => {
-    const base: Season[] = ["spring", "summer", "autumn", "winter"];
-    return [garden.season, ...base.filter((season) => season !== garden.season)];
-  }, [garden.season]);
+  const reportDisplaySeasons: Season[] = ["spring", "summer", "autumn", "winter"];
+  const reportLoadSeasons = useMemo(
+    () => [garden.season, ...reportDisplaySeasons.filter((season) => season !== garden.season)],
+    [garden.season]
+  );
   const canUndo = undoDepth > 0;
   const canRedo = redoDepth > 0;
 
@@ -2244,15 +2245,15 @@ export default function App() {
       setExportProgressValue(12);
       await new Promise((resolve) => window.setTimeout(resolve, 0));
 
-      for (let i = 0; i < reportSeasons.length; i++) {
-        const season = reportSeasons[i];
-        setExportProgressText(`正在等待 ${season} 季植物加载完成（${i + 1}/${reportSeasons.length}）...`);
-        setExportProgressValue(12 + Math.round((i / reportSeasons.length) * 10));
+      for (let i = 0; i < reportLoadSeasons.length; i++) {
+        const season = reportLoadSeasons[i];
+        setExportProgressText(`正在等待 ${season} 季植物加载完成（${i + 1}/${reportLoadSeasons.length}）...`);
+        setExportProgressValue(12 + Math.round((i / reportLoadSeasons.length) * 10));
         const view = await waitForReportFrontView(season);
         const seasonBaseName = `${stamp}-${view.season}`;
 
-        setExportProgressText(`正在写入 ${view.season} 原图（${i + 1}/${rawSeasonalViews.length}）...`);
-        setExportProgressValue(18 + Math.round(((i + 1) / rawSeasonalViews.length) * 18));
+        setExportProgressText(`正在写入 ${view.season} 原图（${i + 1}/${reportLoadSeasons.length}）...`);
+        setExportProgressValue(18 + Math.round(((i + 1) / reportLoadSeasons.length) * 18));
         const inputFileHandle = await inputHandle.getFileHandle(`${seasonBaseName}-input.png`, { create: true });
         const inputWritable = await inputFileHandle.createWritable();
         await inputWritable.write(await dataUrlToBlob(view.frontalPng));
@@ -2262,8 +2263,8 @@ export default function App() {
         let targetExt = "png";
 
         if (frontViewExportStyle !== "download") {
-          setExportProgressText(`正在生成 ${view.season} 风格图（${i + 1}/${rawSeasonalViews.length}）...`);
-          setExportProgressValue(40 + Math.round(((i + 1) / rawSeasonalViews.length) * 45));
+          setExportProgressText(`正在生成 ${view.season} 风格图（${i + 1}/${reportLoadSeasons.length}）...`);
+          setExportProgressValue(40 + Math.round(((i + 1) / reportLoadSeasons.length) * 45));
           const stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle, {
             backgroundImageDataUrl: backgroundReferenceImage?.dataUrl,
           });
@@ -2271,8 +2272,8 @@ export default function App() {
           targetExt = "jpg";
         }
 
-        setExportProgressText(`正在写入 ${view.season} 目标图（${i + 1}/${rawSeasonalViews.length}）...`);
-        setExportProgressValue(65 + Math.round(((i + 1) / rawSeasonalViews.length) * 25));
+        setExportProgressText(`正在写入 ${view.season} 目标图（${i + 1}/${reportLoadSeasons.length}）...`);
+        setExportProgressValue(65 + Math.round(((i + 1) / reportLoadSeasons.length) * 25));
         const targetFileHandle = await targetHandle.getFileHandle(
           `${seasonBaseName}-${styleName}-target.${targetExt}`,
           { create: true }
@@ -2289,7 +2290,7 @@ export default function App() {
           {
             generatedAt: stamp,
             style: styleName,
-            seasons: reportSeasons,
+            seasons: reportDisplaySeasons,
             garden: {
               rows: garden.rows,
               cols: garden.cols,
@@ -2413,17 +2414,40 @@ export default function App() {
 
   async function waitForReportFrontView(season: Season, timeoutMs = 15000) {
     const startedAt = Date.now();
+    let lastLoggedAt = 0;
 
     while (Date.now() - startedAt < timeoutMs) {
       const ref = getReportFrontViewRef(season).current;
-      const frontalPng = ref?.exportPng() ?? "";
       const ready = ref?.isReadyForExport() ?? false;
 
-      if (frontalPng && ready) {
-        return { season, frontalPng };
+      if (ready && ref) {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+        const frontalPng = ref.exportPng() ?? "";
+        if (frontalPng) {
+          return { season, frontalPng };
+        }
+      }
+
+      if (!ref) {
+        console.log(`[report] waiting for ${season} ref to mount`);
+      } else if (!ready) {
+        const now = Date.now();
+        if (now - lastLoggedAt > 1000) {
+          lastLoggedAt = now;
+          console.log(`[report] waiting for ${season} render to be ready`, ref.getExportStatus());
+        }
+      } else {
+        console.log(`[report] ${season} ready but export returned empty png, retrying`);
       }
 
       await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+
+    const fallbackRef = getReportFrontViewRef(season).current;
+    const fallbackPng = fallbackRef?.exportPng() ?? "";
+    if (fallbackPng) {
+      console.warn(`[report] ${season} timed out waiting for full readiness; using fallback export`, fallbackRef?.getExportStatus());
+      return { season, frontalPng: fallbackPng };
     }
 
     throw new Error(`${season} 季 FrontView 还没有准备好，请稍等后再试。`);
@@ -2438,15 +2462,15 @@ export default function App() {
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     try {
       let seasonalViews: Array<{ season: Season; frontalPng: string }> = [];
-      for (let i = 0; i < reportSeasons.length; i++) {
-        const season = reportSeasons[i];
-        setExportProgressText(`正在等待 ${season} 季植物加载完成（${i + 1}/${reportSeasons.length}）...`);
-        setExportProgressValue(10 + Math.round((i / reportSeasons.length) * 12));
+      for (let i = 0; i < reportLoadSeasons.length; i++) {
+        const season = reportLoadSeasons[i];
+        setExportProgressText(`正在等待 ${season} 季植物加载完成（${i + 1}/${reportLoadSeasons.length}）...`);
+        setExportProgressValue(10 + Math.round((i / reportLoadSeasons.length) * 12));
         const view = await waitForReportFrontView(season);
 
         if (frontViewExportStyle !== "download") {
-          setExportProgressText(`正在生成 ${view.season} 风格图（${i + 1}/${reportSeasons.length}）...`);
-          setExportProgressValue(15 + Math.round(((i + 1) / reportSeasons.length) * 60));
+          setExportProgressText(`正在生成 ${view.season} 风格图（${i + 1}/${reportLoadSeasons.length}）...`);
+          setExportProgressValue(15 + Math.round(((i + 1) / reportLoadSeasons.length) * 60));
           let stylized;
           try {
             stylized = await stylizeFrontViewImage(view.frontalPng, frontViewExportStyle, {
@@ -2466,6 +2490,13 @@ export default function App() {
         }
       }
 
+      const orderedSeasonalViews = reportDisplaySeasons
+        .map((season) => seasonalViews.find((view) => view.season === season))
+        .filter((view): view is { season: Season; frontalPng: string } => !!view);
+      console.log("[report] load season order =", reportLoadSeasons.join(" -> "));
+      console.log("[report] display season order =", reportDisplaySeasons.join(" -> "));
+      console.log("[report] final seasonalViews order =", orderedSeasonalViews.map((view) => view.season).join(" -> "));
+
       setExportProgressText("正在生成植物清单和布局说明...");
       setExportProgressValue(80);
       const plants = buildDesignReportPlantRows(garden, allVariants);
@@ -2476,7 +2507,7 @@ export default function App() {
         variants: allVariants,
         plants,
         layoutSvg,
-        seasonalViews,
+        seasonalViews: orderedSeasonalViews,
       });
 
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -2801,7 +2832,7 @@ export default function App() {
             pointerEvents: "none",
           }}
         >
-          {reportSeasons.map((season) => {
+          {reportLoadSeasons.map((season) => {
             const seasonalGarden = { ...garden, season };
             const frontalRef =
               season === "spring"
