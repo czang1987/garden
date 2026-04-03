@@ -483,7 +483,10 @@ export default function App() {
   }
 
   const frontalMetrics = useMemo(() => computeViewMetrics(reportCanvasWidth, 0.22), [garden.cols]);
-  const reportSeasons: Season[] = ["spring", "summer", "autumn", "winter"];
+  const reportSeasons = useMemo(() => {
+    const base: Season[] = ["spring", "summer", "autumn", "winter"];
+    return [garden.season, ...base.filter((season) => season !== garden.season)];
+  }, [garden.season]);
   const canUndo = undoDepth > 0;
   const canRedo = redoDepth > 0;
 
