@@ -115,7 +115,7 @@ export default function PlantCatalog({
         ))}
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
         <button onClick={() => setBoundaryOnly((prev) => !prev)} style={filterChipStyle(boundaryOnly)}>
           边界植物
         </button>
@@ -125,25 +125,27 @@ export default function PlantCatalog({
         <button onClick={() => setLowMaintenanceOnly((prev) => !prev)} style={filterChipStyle(lowMaintenanceOnly)}>
           低维护
         </button>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 12,
-          minWidth: 0,
-        }}
-      >
-        <div style={{ fontSize: 12, color: "#666", whiteSpace: "nowrap" }}>颜色</div>
-        <ColorDotFilterSelect
-          value={activeColor === "all" ? "" : activeColor}
-          colors={availableColors}
-          onChange={(value) => setActiveColor(value || "all")}
-        />
-        <div style={{ fontSize: 12, color: "#4f4f4f", minWidth: 0 }}>
-          {activeColor === "all" ? "全部颜色" : formatColorLabel(activeColor)}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            minWidth: 0,
+            padding: "5px 10px",
+            borderRadius: 999,
+            border: activeColor === "all" ? "1px solid #ddd" : "1px solid #8d9d86",
+            background: activeColor === "all" ? "#fff" : "#f0f5eb",
+          }}
+        >
+          <div style={{ fontSize: 12, color: "#666", whiteSpace: "nowrap" }}>颜色</div>
+          <ColorDotFilterSelect
+            value={activeColor === "all" ? "" : activeColor}
+            colors={availableColors}
+            onChange={(value) => setActiveColor(value || "all")}
+          />
+          <div style={{ fontSize: 12, color: "#4f4f4f", minWidth: 0, whiteSpace: "nowrap" }}>
+            {activeColor === "all" ? "全部颜色" : formatColorLabel(activeColor)}
+          </div>
         </div>
       </div>
 
