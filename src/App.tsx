@@ -3612,23 +3612,6 @@ export default function App() {
                             : "点击“效果预览”生成当前 FrontView 的静态效果图。"}
                       </div>
                     )}
-                    {frontViewPreviewImage && !isGeneratingFrontViewPreview ? (
-                      <button
-                        type="button"
-                        onClick={showFrontViewPreview}
-                        style={{
-                          position: "absolute",
-                          top: 12,
-                          right: 12,
-                          padding: "7px 10px",
-                          borderRadius: 999,
-                          background: "rgba(255,255,255,0.92)",
-                          border: "1px solid #d9d9d9",
-                        }}
-                      >
-                        刷新预览
-                      </button>
-                    ) : null}
                   </div>
                 ) : null}
               </div>
