@@ -36,10 +36,39 @@
           "evergreen": false,
           "boundary": false
         },
+        
+        {
+          "id": "forsythia",
+          "name": "连翘 forsythia",
+          "icon": "/assets/plants/forsythia/spring.png",
+          "link": "https://www.lowes.com/pd/Monrovia-Magical-Gold-Forsythia-in-2-60-QT-Pot/5016114425",
+          "baseHeight": 60,
+          "baseWidth": 48,
+          "zone": "5-8",
+          "sizeref": "h4w4",
+          "footprint": [
+            4,
+            4
+          ],
+          "color": "yellow",
+          "tags": [
+          ],
+          "sun": "full",
+          "water": "dry",
+          "bloomSeasons": [
+            "spring"
+            
+          ],
+          "maintenance": 1,
+          "categoryId": "shrubs",
+          "categoryName": "??",
+          "evergreen": false,
+          "boundary": true
+        },
          {
           "id": "yucca",
           "name": "丝兰 yucca",
-          "icon": "/assets/plants/yucca/icon.png",
+          "icon": "/assets/plants/yucca/summer.png",
           "link": "https://www.lowes.com/pd/White-Common-Yucca-in-2-5-Quart-Pot/5013469587?store=&cm_mmc=shp-_-c-_-prd-_-lwn-_-ggl-_-PMAX_LWN_000_Priority_Item_Omni-_-5013469587-_-online-_-22862735718-_-&gclsrc=aw.ds&gad_source=1&gad_campaignid=23526969576&gbraid=0AAAAAD2B2W9yahLmlqaLOK2sV_UpzT4IA&gclid=Cj0KCQjwyr3OBhD0ARIsALlo-OlEn_W3LbC6ic73OVWcyjf6RrNuE50ltXf6cddoRX_bDTDCDF_WdHUaAh43EALw_wcB",
           "baseHeight": 48,
           "baseWidth": 24,
