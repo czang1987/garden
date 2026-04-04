@@ -36,6 +36,34 @@
           "evergreen": false,
           "boundary": false
         },
+         {
+          "id": "yucca",
+          "name": "丝兰 yucca",
+          "icon": "/assets/plants/yucca/icon.png",
+          "link": "https://www.lowes.com/pd/White-Common-Yucca-in-2-5-Quart-Pot/5013469587?store=&cm_mmc=shp-_-c-_-prd-_-lwn-_-ggl-_-PMAX_LWN_000_Priority_Item_Omni-_-5013469587-_-online-_-22862735718-_-&gclsrc=aw.ds&gad_source=1&gad_campaignid=23526969576&gbraid=0AAAAAD2B2W9yahLmlqaLOK2sV_UpzT4IA&gclid=Cj0KCQjwyr3OBhD0ARIsALlo-OlEn_W3LbC6ic73OVWcyjf6RrNuE50ltXf6cddoRX_bDTDCDF_WdHUaAh43EALw_wcB",
+          "baseHeight": 48,
+          "baseWidth": 24,
+          "zone": "7-11",
+          "sizeref": "h4w4",
+          "footprint": [
+            3,
+            3
+          ],
+          "color": "white",
+          "tags": [
+          ],
+          "sun": "full",
+          "water": "twice",
+          "bloomSeasons": [
+            "summer"
+            
+          ],
+          "maintenance": 1,
+          "categoryId": "shrubs",
+          "categoryName": "??",
+          "evergreen": true,
+          "boundary": true
+        },
         {
           "id": "rose_iceberg_white",
           "name": "Iceberg",
