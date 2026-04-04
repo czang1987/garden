@@ -2956,48 +2956,54 @@ export default function App() {
           })}
         </div>
       ) : null}
-      {isGeneratingLayout || isExportingReport || isStylizingFrontView ? (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: "10px 12px",
-            borderRadius: 10,
-            background: "#f5f8f2",
-            border: "1px solid #d7e2d1",
-            color: "#4f5f4f",
-            fontSize: 13,
-          }}
-        >
-          {exportProgressValue !== null ? (
-            <div
-              style={{
-                height: 6,
-                borderRadius: 999,
-                background: "#dbe6d5",
-                overflow: "hidden",
-                marginBottom: 8,
-              }}
-            >
+      <div
+        style={{
+          marginBottom: 12,
+          minHeight: 58,
+        }}
+      >
+        {isGeneratingLayout || isExportingReport || isStylizingFrontView ? (
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              background: "#f5f8f2",
+              border: "1px solid #d7e2d1",
+              color: "#4f5f4f",
+              fontSize: 13,
+            }}
+          >
+            {exportProgressValue !== null ? (
               <div
                 style={{
-                  width: `${exportProgressValue}%`,
-                  height: "100%",
-                  background: "#6e8f72",
-                  transition: "width 180ms ease",
+                  height: 6,
+                  borderRadius: 999,
+                  background: "#dbe6d5",
+                  overflow: "hidden",
+                  marginBottom: 8,
                 }}
-              />
-            </div>
-          ) : null}
-          {isGeneratingLayout
-            ? exportProgressText || "正在生成布局，请稍等..."
-            : isExportingReport
-              ? exportProgressText || "正在整理并导出设计说明，请稍等..."
-              : exportProgressText || "正在调用风格化接口并下载图片，请稍等..."}
-        </div>
-      ) : isCatalogLoading ? (
+              >
+                <div
+                  style={{
+                    width: `${exportProgressValue}%`,
+                    height: "100%",
+                    background: "#6e8f72",
+                    transition: "width 180ms ease",
+                  }}
+                />
+              </div>
+            ) : null}
+            {isGeneratingLayout
+              ? exportProgressText || "正在生成布局，请稍等..."
+              : isExportingReport
+                ? exportProgressText || "正在整理并导出设计说明，请稍等..."
+                : exportProgressText || "正在调用风格化接口并下载图片，请稍等..."}
+          </div>
+        ) : null}
+      </div>
+      {isCatalogLoading ? (
         <div
           style={{
-            marginBottom: 12,
             padding: "10px 12px",
             borderRadius: 10,
             background: "#faf7f1",
@@ -3262,15 +3268,12 @@ export default function App() {
                     style={{ height: 32 }}
                   >
                     <option value="download">原图</option>
-                    <option value="monet">莫奈</option>
                     <option value="impressionist">印象派</option>
-                    <option value="watercolor">水彩</option>
                     <option value="vangogh">梵高</option>
                     <option value="ukiyoe">浮世绘</option>
                     <option value="animebg">动画背景</option>
                     <option value="architectural">景观效果图</option>
                     <option value="botanical">植物学插画</option>
-                    <option value="pastel">粉彩</option>
                   </select>
                   <input
                     ref={backgroundImageInputRef}
@@ -3379,9 +3382,10 @@ export default function App() {
                           color: isStylizingFrontView ? "#9b9185" : "#5e4c3c",
                           textAlign: "left",
                           cursor: isStylizingFrontView ? "not-allowed" : "pointer",
+                          minWidth: 110,
                         }}
                       >
-                        {isStylizingFrontView ? "正在生成风格图..." : "导出效果图"}
+                        {isStylizingFrontView ? "导出效果图" : "导出效果图"}
                       </button>
                       <button
                         onClick={exportTrainingAssets}

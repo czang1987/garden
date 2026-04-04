@@ -1,14 +1,11 @@
 export type FrontViewExportStyle =
   | "download"
-  | "monet"
   | "impressionist"
-  | "watercolor"
   | "vangogh"
   | "ukiyoe"
   | "animebg"
   | "architectural"
-  | "botanical"
-  | "pastel";
+  | "botanical";
 
 async function getImageDataUrlDimensions(imageDataUrl: string): Promise<{ width: number; height: number }> {
   return await new Promise((resolve, reject) => {

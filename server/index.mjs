@@ -10,25 +10,22 @@ const AI_CHAT_LOG_PATH = path.resolve(process.cwd(), "server", "logs", "design-i
 const MAX_REQUEST_BODY_BYTES = 40 * 1024 * 1024;
 
 const PROMPTS = {
-  monet:
-    "Transform this garden front-view design into a Monet-inspired impressionist oil painting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same layout and structure, only change the visual style to soft brushwork, painterly edges, atmospheric light, and Monet-like color harmony.",
   impressionist:
-    "Transform this garden front-view design into a classic impressionist painting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and structure. Use lively broken brushstrokes, luminous natural color, soft atmospheric depth, painterly edges, and a balanced plein-air impressionist feeling. Keep the garden layout recognizable and the plant masses readable.",
-  watercolor:
-    "Transform this garden front-view design into a refined landscape watercolor rendering. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and spatial structure. Use transparent watercolor washes, soft edges, subtle pigment blooms, gentle color bleeding, light paper texture, and a natural hand-painted landscape illustration style. Keep the planting layout clearly readable. Avoid cartoon style, anime style, and heavy digital painting effects.",
+    "Transform this garden front-view design into a classic impressionist painting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and structure. Use lively broken brushstrokes, natural color, soft atmospheric depth, painterly edges, and a balanced plein-air impressionist feeling. Keep the garden layout recognizable and the plant masses readable.",
   vangogh:
     "Transform this garden front-view design into a Van Gogh-inspired post-impressionist oil painting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same layout and structure, only change the visual style to expressive brushstrokes, bold painterly texture, and Van Gogh-like color energy.",
   ukiyoe:
     "Transform this garden front-view design into a refined ukiyo-e inspired print. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and structure. Use elegant flattened shapes, crisp contour lines, restrained but beautiful color blocks, decorative rhythm, and a traditional woodblock print feeling while keeping the garden layout clear and readable.",
   animebg:
-    "Transform this garden front-view design into a warm hand-painted animated background illustration. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and structure. Use luminous natural color, soft atmospheric light, painterly foliage, clear readable plant masses, and a polished hand-painted animation-background feeling with warmth, calm, and charm. Keep the garden layout recognizable and avoid exaggerated cartoon distortion.",
+    "Transform this garden front-view design into a warm hand-painted animated background illustration. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and structure. Use natural color, soft atmospheric light, painterly foliage, clear readable plant masses, and a polished hand-painted animation-background feeling with warmth, calm, and charm. Keep the garden layout recognizable and avoid exaggerated cartoon distortion.",
   architectural:
-    "Transform this garden front-view design into a refined professional landscape architectural rendering for an American residential foundation planting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and spatial structure. Use clean atmospheric rendering, soft realistic lighting, controlled textures, elegant presentation, and a polished landscape design visualization style. Add a subtle American home frontage background behind the planting, such as house siding or brick facade, porch edge, foundation wall, front windows, entry walk, or front steps, so the scene reads clearly as a suburban front-yard foundation planting. Do not place the planting bed directly in front of a main entrance, front door, or primary circulation path; keep entrances and exits visually clear and believable. Keep the architecture understated and secondary to the planting, while keeping the plants readable and the layout highly recognizable.",
+    "Transform this garden front-view design into a refined professional landscape architectural rendering for an American residential foundation planting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and spatial structure. Use clean atmospheric rendering, controlled textures, realistic moderate lighting, elegant presentation, and a polished landscape design visualization style. Add a subtle American home frontage background behind the planting, such as house siding or brick facade, porch edge, foundation wall, front windows, entry walk, or front steps, so the scene reads clearly as a suburban front-yard foundation planting. Do not place the planting bed directly in front of a main entrance, front door, or primary circulation path; keep entrances and exits visually clear and believable. Keep the architecture understated and secondary to the planting, while keeping the plants readable and the layout highly recognizable.",
   botanical:
-    "Transform this garden front-view design into a botanical illustration. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and structure. Use refined botanical painting detail, elegant hand-rendered texture, crisp readable plant forms, richer natural color, clearer color separation, luminous but realistic floral hues, and a polished scientific-illustration quality. Increase tonal contrast, deepen shadows slightly, keep highlights clean, and make the flower and foliage colors more distinct while remaining natural. Avoid washed-out colors, low contrast, flat lighting, and overly pale rendering while keeping the layout clearly readable.",
-  pastel:
-    "Transform this garden front-view design into a soft pastel painting. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same layout and structure. Use gentle pastel color transitions, powdery texture, soft edges, atmospheric light, and a dreamy hand-painted quality. Keep plant masses readable.",
+    "Transform this garden front-view design into a botanical illustration. Preserve the exact garden composition, plant positions, relative sizes, and front-view perspective. Do not add or remove plants. Keep the same planting layout and structure. Use refined botanical painting detail, elegant hand-rendered texture, crisp readable plant forms, richer natural color, clearer color separation, realistic floral hues, and a polished scientific-illustration quality. Increase tonal contrast, deepen shadows slightly, keep highlights clean, and make the flower and foliage colors more distinct while remaining natural. Avoid washed-out colors, low contrast, flat lighting, and overly pale rendering while keeping the layout clearly readable.",
 };
+
+const EXPOSURE_CONSTRAINT_PROMPT =
+  "Keep exposure natural and slightly restrained. Avoid blown highlights, washed-out skies, overly bright foliage, glowing whites, and high-key overexposure. Preserve readable midtones, gentle but visible shadows, and realistic contrast.";
 
 const BACKGROUND_REFERENCE_PROMPT =
   "When a second reference image is provided, treat it as the actual site/background context behind the garden. The first image is the exact garden front-view layout to preserve. The second image is the background to place the garden in front of. If the second image shows a house, facade, porch, windows, front steps, foundation wall, or entry walk, keep that architecture recognizable and believable, and compose the planting naturally in front of it. Preserve the garden composition from the first image while integrating the background from the second image with realistic spatial depth and proportion. Keep the background secondary to the planting and do not let it overwrite or rearrange the garden layout.";
@@ -36,7 +33,8 @@ const BACKGROUND_REFERENCE_PROMPT =
 function buildStylizePrompt(style, hasBackgroundReference) {
   const basePrompt = PROMPTS[style];
   if (!basePrompt) return null;
-  return hasBackgroundReference ? `${basePrompt} ${BACKGROUND_REFERENCE_PROMPT}` : basePrompt;
+  const prompt = `${basePrompt} ${EXPOSURE_CONSTRAINT_PROMPT}`;
+  return hasBackgroundReference ? `${prompt} ${BACKGROUND_REFERENCE_PROMPT}` : prompt;
 }
 
 function sendJson(res, status, data) {
@@ -87,7 +85,7 @@ function maskSecret(secret) {
 }
 
 function normalizeStyle(style) {
-  return ["monet", "impressionist", "watercolor", "vangogh", "ukiyoe", "animebg", "architectural", "botanical", "pastel"].includes(style) ? style : null;
+  return ["impressionist", "vangogh", "ukiyoe", "animebg", "architectural", "botanical"].includes(style) ? style : null;
 }
 
 function clamp(value, min, max) {
