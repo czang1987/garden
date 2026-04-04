@@ -2191,6 +2191,103 @@ export default function App() {
     return canvas.toDataURL("image/jpeg", 0.82);
   }
 
+  function getShareUrl() {
+    if (typeof window === "undefined") return "https://plantcanvas.online";
+    const { origin, hostname } = window.location;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "https://plantcanvas.online";
+    }
+    return origin.replace(/\/+$/, "");
+  }
+
+  function loadImageElement(src: string, crossOrigin = false) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      if (crossOrigin) image.crossOrigin = "anonymous";
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error(`图片加载失败: ${src}`));
+      image.src = src;
+    });
+  }
+
+  function drawRoundedRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number
+  ) {
+    const r = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + width, y, x + width, y + height, r);
+    ctx.arcTo(x + width, y + height, x, y + height, r);
+    ctx.arcTo(x, y + height, x, y, r);
+    ctx.arcTo(x, y, x + width, y, r);
+    ctx.closePath();
+  }
+
+  async function composeShareImageDataUrl(baseDataUrl: string, shareUrl: string) {
+    const baseImage = await loadImageElement(baseDataUrl);
+    const canvas = document.createElement("canvas");
+    canvas.width = baseImage.naturalWidth || baseImage.width;
+    canvas.height = baseImage.naturalHeight || baseImage.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("浏览器不支持分享图生成");
+    }
+
+    ctx.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
+
+    const qrSize = Math.max(58, Math.round(Math.min(canvas.width, canvas.height) * 0.09));
+    const padding = Math.max(10, Math.round(canvas.width * 0.01));
+    const textWidth = Math.max(112, Math.round(canvas.width * 0.14));
+    const cardWidth = Math.max(qrSize, textWidth) + padding * 2;
+    const cardHeight = qrSize + padding * 3 + Math.max(16, Math.round(canvas.height * 0.018));
+    const cardX = canvas.width - cardWidth - padding;
+    const cardY = padding;
+
+    let qrImage: HTMLImageElement | null = null;
+    try {
+      qrImage = await loadImageElement(
+        `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(shareUrl)}`,
+        true
+      );
+    } catch (error) {
+      console.warn("[share] QR code image load failed, fallback to URL-only card", error);
+    }
+
+    const displayUrl = "plantcanvas.online";
+    ctx.fillStyle = "#6f6458";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.font = `${Math.max(11, Math.round(canvas.width * 0.01))}px Georgia, serif`;
+    ctx.shadowColor = "rgba(255,255,255,0.85)";
+    ctx.shadowBlur = 8;
+    const textY = cardY + padding;
+    ctx.fillText(displayUrl, cardX + cardWidth / 2, textY);
+    ctx.shadowBlur = 0;
+
+    const qrX = cardX + (cardWidth - qrSize) / 2;
+    const qrY = textY + Math.max(16, Math.round(canvas.height * 0.018)) + padding;
+    if (qrImage) {
+      ctx.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
+    } else {
+      ctx.strokeStyle = "rgba(94,76,60,0.18)";
+      ctx.lineWidth = 1;
+      drawRoundedRect(ctx, qrX, qrY, qrSize, qrSize, 12);
+      ctx.stroke();
+      ctx.fillStyle = "#7b6a58";
+      ctx.font = `${Math.max(10, Math.round(qrSize * 0.13))}px Georgia, serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("QR", qrX + qrSize / 2, qrY + qrSize / 2);
+    }
+
+    return canvas.toDataURL("image/jpeg", 0.92);
+  }
+
   async function handleBackgroundReferenceFile(file: File | null) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -2342,25 +2439,26 @@ export default function App() {
       return;
     }
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    if (frontViewExportStyle === "download") {
-      downloadDataUrl(url, `frontview-${stamp}.png`);
-      return;
-    }
-
     if (isStylizingFrontView) return;
     setIsStylizingFrontView(true);
-    setExportProgressText(
-      frontViewExportStyle === "download" ? "正在准备导出当前效果图..." : "正在上传当前效果图并生成风格版本..."
-    );
+    const shareUrl = getShareUrl();
+    setExportProgressText(frontViewExportStyle === "download" ? "正在准备导出当前效果图..." : "正在上传当前效果图并生成风格版本...");
     setExportProgressValue(frontViewExportStyle === "download" ? 30 : 20);
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     try {
-      const result = await stylizeFrontViewImage(url, frontViewExportStyle, {
-        backgroundImageDataUrl: backgroundReferenceImage?.dataUrl,
-      });
-      setExportProgressText("风格图已生成，正在下载...");
-      setExportProgressValue(90);
-      downloadDataUrl(result.imageDataUrl, `frontview-${frontViewExportStyle}-${stamp}.jpg`);
+      let exportImageDataUrl = url;
+      if (frontViewExportStyle !== "download") {
+        const result = await stylizeFrontViewImage(url, frontViewExportStyle, {
+          backgroundImageDataUrl: backgroundReferenceImage?.dataUrl,
+        });
+        exportImageDataUrl = result.imageDataUrl;
+      }
+      setExportProgressText("正在叠加分享信息...");
+      setExportProgressValue(88);
+      const shareImageDataUrl = await composeShareImageDataUrl(exportImageDataUrl, shareUrl);
+      setExportProgressText("效果图已生成，正在下载...");
+      setExportProgressValue(96);
+      downloadDataUrl(shareImageDataUrl, `frontview-${frontViewExportStyle}-${stamp}.jpg`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       alert(`风格化失败：${message}`);
