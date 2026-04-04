@@ -269,6 +269,9 @@ export default function App() {
   const [viewportWidth, setViewportWidth] = useState(
     typeof window === "undefined" ? 1280 : window.innerWidth
   );
+  const [viewportHeight, setViewportHeight] = useState(
+    typeof window === "undefined" ? 800 : window.innerHeight
+  );
   const [editorWidth, setEditorWidth] = useState(1280);
   const [garden, setGarden] = useState<GardenState>(createGarden(20, 20));
   const [rowGapRatio, setRowGapRatio] = useState(0.28);
@@ -334,7 +337,9 @@ export default function App() {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const tutorialExportControlsRef = useRef<HTMLDivElement | null>(null);
   const tutorialExportPrimaryRef = useRef<HTMLDivElement | null>(null);
+  const tutorialPreviewExportRef = useRef<HTMLDivElement | null>(null);
   const frontEditorRef = useRef<HTMLDivElement | null>(null);
+  const tutorialViewAngleRef = useRef<HTMLDivElement | null>(null);
   const autoPanelRef = useRef<HTMLDivElement | null>(null);
   const catalogPanelRef = useRef<HTMLDivElement | null>(null);
   const frontPaneRef = useRef<HTMLDivElement | null>(null);
@@ -353,7 +358,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handleResize = () => setViewportWidth(window.innerWidth);
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+      setViewportHeight(window.innerHeight);
+    };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
@@ -457,12 +465,13 @@ export default function App() {
 
   const isCompactLayout = viewportWidth < 960;
   const isPhoneLayout = viewportWidth < 720;
+  const isPhonePortrait = isPhoneLayout && viewportHeight > viewportWidth;
   useEffect(() => {
     console.log("[layout] viewportWidth =", viewportWidth);
   }, [viewportWidth]);
   const editorGap = isCompactLayout ? 16 : 20;
   const compactViewportWidth = Math.max(320, viewportWidth - 32);
-  const desktopSidebarWidth = 430;
+  const desktopSidebarWidth = 360;
   const derivedFrontPaneWidth = isCompactLayout
     ? compactViewportWidth
     : Math.max(420, editorWidth - desktopSidebarWidth - editorGap);
@@ -2476,12 +2485,13 @@ export default function App() {
       alert("当前 FrontView 还没有可预览的画布。");
       return;
     }
-
-    setFrontViewMode("preview");
     setFrontViewPreviewError("");
+    const shareUrl = getShareUrl();
 
     if (frontViewExportStyle === "download") {
-      setFrontViewPreviewImage(url);
+      const shareImageDataUrl = await composeShareImageDataUrl(url, shareUrl);
+      setFrontViewPreviewImage(shareImageDataUrl);
+      setFrontViewMode("preview");
       return;
     }
 
@@ -2492,10 +2502,13 @@ export default function App() {
       const result = await stylizeFrontViewImage(url, frontViewExportStyle, {
         backgroundImageDataUrl: backgroundReferenceImage?.dataUrl,
       });
-      setFrontViewPreviewImage(result.imageDataUrl);
+      const shareImageDataUrl = await composeShareImageDataUrl(result.imageDataUrl, shareUrl);
+      setFrontViewPreviewImage(shareImageDataUrl);
+      setFrontViewMode("preview");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setFrontViewPreviewError(message);
+      setFrontViewMode("preview");
     } finally {
       setIsGeneratingFrontViewPreview(false);
     }
@@ -2828,7 +2841,7 @@ export default function App() {
 
   useEffect(() => {
     if (!showTutorial) return;
-    if (tutorialStep === 1) setRightPanel("auto");
+    if (tutorialStep === 2) setRightPanel("auto");
     if (tutorialStep === 3) setRightPanel("catalog");
   }, [showTutorial, tutorialStep]);
 
@@ -2844,10 +2857,11 @@ export default function App() {
     }
 
     const resolveTarget = () => {
-      if (tutorialStep === 0) return tutorialExportPrimaryRef.current ?? tutorialExportControlsRef.current;
-      if (tutorialStep === 1) return autoPanelRef.current;
-      if (tutorialStep === 2) return frontEditorRef.current;
+      if (tutorialStep === 0) return frontEditorRef.current;
+      if (tutorialStep === 1) return tutorialViewAngleRef.current;
+      if (tutorialStep === 2) return autoPanelRef.current;
       if (tutorialStep === 3) return catalogPanelRef.current;
+      if (tutorialStep === 4) return tutorialPreviewExportRef.current ?? tutorialExportPrimaryRef.current ?? tutorialExportControlsRef.current;
       return null;
     };
 
@@ -2884,9 +2898,14 @@ export default function App() {
 
   const tutorialSteps = [
     {
-      title: "导出与风格区",
+      title: "Front View",
       text:
-        "先选季节，再选导出风格。这里可以导出当前效果图，也可以导出带植物清单、layout 和四季效果图的设计说明。",
+        "这里是主要编辑画面。你可以直接查看当前花园布局，点击画面进入编辑模式，选中具体位置后再放置或删除植物。",
+    },
+    {
+      title: "调整视角",
+      text:
+        "拖动这根滑动条可以改变 Front View 的视角压缩比例，让画面更扁或更高，方便观察不同立面效果。",
     },
     {
       title: "自动生成植物",
@@ -2894,14 +2913,14 @@ export default function App() {
         "右侧默认打开这个面板。先点 `自动生成布局`，然后再调高度、梯度、对称性、成片感、颜色偏好和前中后排密度。",
     },
     {
-      title: "Front View 编辑区",
-      text:
-        "左侧是主要编辑画面。点击画面进入编辑模式，之后可以选中具体位置，再切到 `选植物` 面板做手动摆放。选中已有植物后，按 `Delete` 或 `Backspace` 可以直接删除。",
-    },
-    {
       title: "选植物面板",
       text:
         "这里适合做细调。自动生成后，如果你想换掉某几株、补几株，或者按自己的想法手动摆放，就在这个面板完成。",
+    },
+    {
+      title: "风格、预览与导出",
+      text:
+        "最后在这里选择季节和风格。切到 `效果预览` 时，会先按这里选的风格生成一张静态预览图；导出当前效果图和导出设计说明时，也都会使用这里的风格设置。",
     },
   ] as const;
   const activeTutorial = tutorialSteps[tutorialStep] ?? tutorialSteps[0];
@@ -2917,6 +2936,23 @@ export default function App() {
           style={{ display: "none" }}
         />
       </div>
+
+      {isPhonePortrait ? (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "10px 12px",
+            borderRadius: 12,
+            background: "#f8f3e8",
+            border: "1px solid #e2d8c7",
+            color: "#6b5a46",
+            fontSize: 13,
+            lineHeight: 1.5,
+          }}
+        >
+          当前是手机竖屏，横屏查看和编辑 Front View 的体验会更好。
+        </div>
+      ) : null}
 
       {reportViewsActive ? (
         <div
@@ -3084,7 +3120,7 @@ export default function App() {
         ref={editorRef}
         style={{
           display: "grid",
-          gridTemplateColumns: isCompactLayout ? "minmax(0, 1fr)" : "minmax(0, 1fr) minmax(340px, 430px)",
+          gridTemplateColumns: isCompactLayout ? "minmax(0, 1fr)" : "minmax(0, 1fr) minmax(300px, 360px)",
           gap: isCompactLayout ? 16 : 20,
           alignItems: "flex-start",
           width: "100%",
@@ -3202,54 +3238,63 @@ export default function App() {
                   </svg>
                 </button>
                 <div
-                  style={{
-                    display: "inline-flex",
-                    gap: 6,
-                    padding: 4,
-                    borderRadius: 999,
-                    background: "#f3efe7",
-                    border: "1px solid #e0d8cb",
-                  }}
-                >
-                <button
-                  type="button"
-                  onClick={() => setFrontViewMode("edit")}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 999,
-                    border: frontViewMode === "edit" ? "1px solid #6e8f72" : "1px solid transparent",
-                    background: frontViewMode === "edit" ? "#eef6ee" : "transparent",
-                    color: "#2f3d2f",
-                  }}
-                >
-                  编辑模式
-                </button>
-                <button
-                  type="button"
-                  onClick={showFrontViewPreview}
-                  disabled={isGeneratingFrontViewPreview}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 999,
-                    border: frontViewMode === "preview" ? "1px solid #6e8f72" : "1px solid transparent",
-                    background: frontViewMode === "preview" ? "#eef6ee" : "transparent",
-                    color: "#2f3d2f",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {isGeneratingFrontViewPreview ? "生成预览中..." : "效果预览"}
-                </button>
-                </div>
-                <div
-                  ref={tutorialExportControlsRef}
+                  ref={tutorialPreviewExportRef}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 6,
                     flexWrap: "wrap",
-                    marginLeft: 6,
                   }}
                 >
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      gap: 6,
+                      padding: 4,
+                      borderRadius: 999,
+                      background: "#f3efe7",
+                      border: "1px solid #e0d8cb",
+                    }}
+                  >
+                  <button
+                    type="button"
+                    onClick={() => setFrontViewMode("edit")}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 999,
+                      border: frontViewMode === "edit" ? "1px solid #6e8f72" : "1px solid transparent",
+                      background: frontViewMode === "edit" ? "#eef6ee" : "transparent",
+                      color: "#2f3d2f",
+                    }}
+                  >
+                    编辑模式
+                  </button>
+                  <button
+                    type="button"
+                    onClick={showFrontViewPreview}
+                    disabled={isGeneratingFrontViewPreview}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 999,
+                      border: frontViewMode === "preview" ? "1px solid #6e8f72" : "1px solid transparent",
+                      background: frontViewMode === "preview" ? "#eef6ee" : "transparent",
+                      color: "#2f3d2f",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {isGeneratingFrontViewPreview ? "生成预览中..." : "效果预览"}
+                  </button>
+                  </div>
+                  <div
+                    ref={tutorialExportControlsRef}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      flexWrap: "wrap",
+                      marginLeft: 6,
+                    }}
+                  >
                   <div
                     ref={tutorialExportPrimaryRef}
                     style={{
@@ -3433,6 +3478,7 @@ export default function App() {
                       </button>
                     </>
                   ) : null}
+                </div>
                   <label>
                     Depth (ft):
                     <input
@@ -3501,6 +3547,7 @@ export default function App() {
                 </div>
                 {!isCompactLayout ? (
                   <div
+                    ref={tutorialViewAngleRef}
                     style={{
                       position: "absolute",
                       top: 0,
@@ -3586,7 +3633,7 @@ export default function App() {
                 ) : null}
               </div>
               {isCompactLayout ? (
-                <div style={{ width: "100%", paddingTop: 4 }}>
+                <div ref={tutorialViewAngleRef} style={{ width: "100%", paddingTop: 4 }}>
                   <input
                     type="range"
                     min={0.15}
