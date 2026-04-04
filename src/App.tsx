@@ -333,6 +333,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const tutorialExportControlsRef = useRef<HTMLDivElement | null>(null);
+  const tutorialExportPrimaryRef = useRef<HTMLDivElement | null>(null);
   const frontEditorRef = useRef<HTMLDivElement | null>(null);
   const autoPanelRef = useRef<HTMLDivElement | null>(null);
   const catalogPanelRef = useRef<HTMLDivElement | null>(null);
@@ -2843,7 +2844,7 @@ export default function App() {
     }
 
     const resolveTarget = () => {
-      if (tutorialStep === 0) return tutorialExportControlsRef.current;
+      if (tutorialStep === 0) return tutorialExportPrimaryRef.current ?? tutorialExportControlsRef.current;
       if (tutorialStep === 1) return autoPanelRef.current;
       if (tutorialStep === 2) return frontEditorRef.current;
       if (tutorialStep === 3) return catalogPanelRef.current;
@@ -3249,58 +3250,152 @@ export default function App() {
                     marginLeft: 6,
                   }}
                 >
-                  <select
-                    value={garden.season}
-                    onChange={(e) => {
-                      captureUndoSnapshot();
-                      setGarden((g) => ({ ...g, season: e.target.value as Season }));
-                    }}
-                    style={{ height: 32 }}
-                  >
-                    <option value="spring">spring</option>
-                    <option value="summer">summer</option>
-                    <option value="autumn">autumn</option>
-                    <option value="winter">winter</option>
-                  </select>
-                  <select
-                    value={frontViewExportStyle}
-                    onChange={(e) => setFrontViewExportStyle(e.target.value as FrontViewExportStyle)}
-                    style={{ height: 32 }}
-                  >
-                    <option value="download">原图</option>
-                    <option value="impressionist">印象派</option>
-                    <option value="vangogh">梵高</option>
-                    <option value="ukiyoe">浮世绘</option>
-                    <option value="animebg">动画背景</option>
-                    <option value="architectural">景观效果图</option>
-                    <option value="botanical">植物学插画</option>
-                  </select>
-                  <input
-                    ref={backgroundImageInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      void handleBackgroundReferenceFile(e.currentTarget.files?.[0] ?? null);
-                      e.currentTarget.value = "";
-                    }}
-                    style={{ display: "none" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => backgroundImageInputRef.current?.click()}
+                  <div
+                    ref={tutorialExportPrimaryRef}
                     style={{
-                      padding: "6px 12px",
-                      borderRadius: 999,
-                      border: "1px solid #cdbdb3",
-                      background: "#f6f1e8",
-                      color: "#5e4c3c",
-                      whiteSpace: "nowrap",
-                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      flexWrap: "wrap",
                     }}
-                    title="上传一张房子或立面背景图，生成效果图时会让 AI 参考这个背景"
                   >
-                    {backgroundReferenceImage ? "更换背景" : "上传背景"}
-                  </button>
+                    <select
+                      value={garden.season}
+                      onChange={(e) => {
+                        captureUndoSnapshot();
+                        setGarden((g) => ({ ...g, season: e.target.value as Season }));
+                      }}
+                      style={{ height: 32 }}
+                    >
+                      <option value="spring">spring</option>
+                      <option value="summer">summer</option>
+                      <option value="autumn">autumn</option>
+                      <option value="winter">winter</option>
+                    </select>
+                    <select
+                      value={frontViewExportStyle}
+                      onChange={(e) => setFrontViewExportStyle(e.target.value as FrontViewExportStyle)}
+                      style={{ height: 32 }}
+                    >
+                      <option value="download">原图</option>
+                      <option value="impressionist">印象派</option>
+                      <option value="vangogh">梵高</option>
+                      <option value="ukiyoe">浮世绘</option>
+                      <option value="animebg">动画背景</option>
+                      <option value="architectural">景观效果图</option>
+                      <option value="botanical">植物学插画</option>
+                    </select>
+                    <input
+                      ref={backgroundImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        void handleBackgroundReferenceFile(e.currentTarget.files?.[0] ?? null);
+                        e.currentTarget.value = "";
+                      }}
+                      style={{ display: "none" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => backgroundImageInputRef.current?.click()}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 999,
+                        border: "1px solid #cdbdb3",
+                        background: "#f6f1e8",
+                        color: "#5e4c3c",
+                        whiteSpace: "nowrap",
+                        cursor: "pointer",
+                      }}
+                      title="上传一张房子或立面背景图，生成效果图时会让 AI 参考这个背景"
+                    >
+                      {backgroundReferenceImage ? "更换背景" : "上传背景"}
+                    </button>
+                    <details style={{ position: "relative" }}>
+                      <summary
+                        style={{
+                          listStyle: "none",
+                          padding: "6px 12px",
+                          borderRadius: 999,
+                          border: "1px solid #cdbdb3",
+                          background: "#f6f1e8",
+                          color: "#5e4c3c",
+                          whiteSpace: "nowrap",
+                          cursor: "pointer",
+                          userSelect: "none",
+                        }}
+                      >
+                        导出 ▾
+                      </summary>
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "calc(100% + 8px)",
+                          right: 0,
+                          minWidth: 188,
+                          padding: 8,
+                          borderRadius: 12,
+                          border: "1px solid #ddd5c8",
+                          background: "#fffdf8",
+                          boxShadow: "0 10px 28px rgba(56, 47, 39, 0.12)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 6,
+                          zIndex: 20,
+                        }}
+                      >
+                        <button
+                          onClick={exportFrontViewPng}
+                          disabled={isStylizingFrontView}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            border: "1px solid #e0d5c8",
+                            background: isStylizingFrontView ? "#f2ede7" : "#fff",
+                            color: isStylizingFrontView ? "#9b9185" : "#5e4c3c",
+                            textAlign: "left",
+                            cursor: isStylizingFrontView ? "not-allowed" : "pointer",
+                            minWidth: 110,
+                          }}
+                        >
+                          导出效果图
+                        </button>
+                        <button
+                          onClick={exportTrainingAssets}
+                          disabled={isExportingTrainingAssets || isExportingReport || isStylizingFrontView}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            border: "1px solid #e0d5c8",
+                            background:
+                              isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "#f2ede7" : "#fff",
+                            color:
+                              isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "#9b9185" : "#5e4c3c",
+                            textAlign: "left",
+                            cursor:
+                              isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          {isExportingTrainingAssets ? "正在生成训练素材..." : "生成训练素材"}
+                        </button>
+                        <button
+                          onClick={exportDesignReport}
+                          disabled={isExportingReport}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            border: "1px solid #e0d5c8",
+                            background: isExportingReport ? "#f2ede7" : "#fff",
+                            color: isExportingReport ? "#9b9185" : "#5e4c3c",
+                            textAlign: "left",
+                            cursor: isExportingReport ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
+                        </button>
+                      </div>
+                    </details>
+                  </div>
                   {backgroundReferenceImage ? (
                     <>
                       <span
@@ -3338,90 +3433,6 @@ export default function App() {
                       </button>
                     </>
                   ) : null}
-                  <details style={{ position: "relative" }}>
-                    <summary
-                      style={{
-                        listStyle: "none",
-                        padding: "6px 12px",
-                        borderRadius: 999,
-                        border: "1px solid #cdbdb3",
-                        background: "#f6f1e8",
-                        color: "#5e4c3c",
-                        whiteSpace: "nowrap",
-                        cursor: "pointer",
-                        userSelect: "none",
-                      }}
-                    >
-                      导出 ▾
-                    </summary>
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "calc(100% + 8px)",
-                        right: 0,
-                        minWidth: 188,
-                        padding: 8,
-                        borderRadius: 12,
-                        border: "1px solid #ddd5c8",
-                        background: "#fffdf8",
-                        boxShadow: "0 10px 28px rgba(56, 47, 39, 0.12)",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                        zIndex: 20,
-                      }}
-                    >
-                      <button
-                        onClick={exportFrontViewPng}
-                        disabled={isStylizingFrontView}
-                        style={{
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid #e0d5c8",
-                          background: isStylizingFrontView ? "#f2ede7" : "#fff",
-                          color: isStylizingFrontView ? "#9b9185" : "#5e4c3c",
-                          textAlign: "left",
-                          cursor: isStylizingFrontView ? "not-allowed" : "pointer",
-                          minWidth: 110,
-                        }}
-                      >
-                        {isStylizingFrontView ? "导出效果图" : "导出效果图"}
-                      </button>
-                      <button
-                        onClick={exportTrainingAssets}
-                        disabled={isExportingTrainingAssets || isExportingReport || isStylizingFrontView}
-                        style={{
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid #e0d5c8",
-                          background:
-                            isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "#f2ede7" : "#fff",
-                          color:
-                            isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "#9b9185" : "#5e4c3c",
-                          textAlign: "left",
-                          cursor:
-                            isExportingTrainingAssets || isExportingReport || isStylizingFrontView ? "not-allowed" : "pointer",
-                        }}
-                      >
-                        {isExportingTrainingAssets ? "正在生成训练素材..." : "生成训练素材"}
-                      </button>
-                      <button
-                        onClick={exportDesignReport}
-                        disabled={isExportingReport}
-                        style={{
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid #e0d5c8",
-                          background: isExportingReport ? "#f2ede7" : "#fff",
-                          color: isExportingReport ? "#9b9185" : "#5e4c3c",
-                          textAlign: "left",
-                          cursor: isExportingReport ? "not-allowed" : "pointer",
-                        }}
-                      >
-                        {isExportingReport ? "正在导出设计说明..." : "导出设计说明"}
-                      </button>
-                    </div>
-                  </details>
                   <label>
                     Depth (ft):
                     <input
