@@ -280,6 +280,7 @@ export default function App() {
   const [zoneInput, setZoneInput] = useState(garden.zone);
   const [categories, setCategories] = useState<PlantCategory[]>([]);
   const [selectedCell, setSelectedCell] = useState<{ r: number; c: number } | null>(null);
+  const [dragPreviewCell, setDragPreviewCell] = useState<{ r: number; c: number } | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [catalogPaneWidth, setCatalogPaneWidth] = useState(320);
   const [designIntent, setDesignIntent] = useState<DesignIntent>(DEFAULT_DESIGN_INTENT);
@@ -1683,11 +1684,15 @@ export default function App() {
 
   function canPlaceAtSelected(v: PlantVariant) {
     if (!selectedCell) return false;
+    return canPlaceVariantAtCell(v, selectedCell);
+  }
+
+  function canPlaceVariantAtCell(v: PlantVariant, targetCell: { r: number; c: number }) {
     if (!plantSupportsZone(v, garden.zone)) return false;
     const freed = selectedPlantFreedCells();
     const fp = (v.footprint ?? [1, 1]) as [number, number];
 
-    for (const cell of footprintCells(selectedCell, fp)) {
+    for (const cell of footprintCells(targetCell, fp)) {
       if (!inBounds(cell.r, cell.c)) return false;
       if (occupancy[cell.r]?.[cell.c] && !freed.has(`${cell.r},${cell.c}`)) return false;
     }
@@ -1758,6 +1763,38 @@ export default function App() {
     }
 
     setGarden(next);
+    setEditMode(true);
+  }
+
+  function canMoveSelectedPlantTo(targetCell: { r: number; c: number } | null) {
+    if (!targetCell) return false;
+    const resolved = selectedPlantAnchor;
+    if (!resolved) return false;
+    const variant = allVariants.find((item) => item.id === resolved.anchor.plant);
+    if (!variant) return false;
+    return canPlaceVariantAtCell(variant, targetCell);
+  }
+
+  function moveSelectedPlantTo(targetCell: { r: number; c: number } | null) {
+    if (!targetCell) return;
+    const resolved = selectedPlantAnchor;
+    if (!resolved) return;
+    if (resolved.anchor.row === targetCell.r && resolved.anchor.col === targetCell.c) return;
+    const variant = allVariants.find((item) => item.id === resolved.anchor.plant);
+    if (!variant) return;
+    if (!canPlaceVariantAtCell(variant, targetCell)) return;
+
+    captureUndoSnapshot();
+    const next = structuredClone(garden);
+    for (const cell of footprintCells({ r: resolved.anchor.row, c: resolved.anchor.col }, resolved.footprint)) {
+      const current = getCell(next, cell.r, cell.c);
+      if (current) current.plant = "empty";
+    }
+    const target = getCell(next, targetCell.r, targetCell.c);
+    if (!target) return;
+    target.plant = resolved.anchor.plant;
+    setGarden(next);
+    setSelectedCell({ ...targetCell });
     setEditMode(true);
   }
 
@@ -3152,7 +3189,7 @@ export default function App() {
             >
               <div style={{ fontSize: 13, color: "#666" }}>
                 {frontViewMode === "edit"
-                  ? "点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，可按 Delete / Backspace，或点“删除植物”按钮。"
+                  ? "点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，可直接拖动到新位置；也可按 Delete / Backspace，或点“删除植物”按钮。"
                   : "效果预览是静态图，不可编辑；切回编辑模式后可继续摆放和删除植物。"}
               </div>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -3533,14 +3570,23 @@ export default function App() {
                     canvasWidth={canvasWidth}
                     showEditGrid={editMode}
                     selectedCell={selectedCell}
+                    dragPreviewCell={dragPreviewCell}
+                    dragPreviewValid={canMoveSelectedPlantTo(dragPreviewCell)}
                     symmetryHints={symmetryHints}
                     onCellSelect={(cell) => {
+                      setDragPreviewCell(null);
                       setEditMode(true);
                       setSelectedCell(cell);
                     }}
                     onCanvasBackgroundClick={() => {
+                      setDragPreviewCell(null);
                       setEditMode(false);
                       setSelectedCell(null);
+                    }}
+                    onPlantDragPreview={setDragPreviewCell}
+                    onPlantDrop={(cell) => {
+                      moveSelectedPlantTo(cell);
+                      setDragPreviewCell(null);
                     }}
                     onTextureLoadProgressChange={setFrontViewTextureLoadProgress}
                   />

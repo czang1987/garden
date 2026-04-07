@@ -63,8 +63,12 @@ type FrontViewProps = {
   symmetryHints?: Array<{ r: number; c: number; score?: number }>;
   onCellSelect?: (cell: { r: number; c: number }) => void;
   onCanvasBackgroundClick?: () => void;
+  onPlantDragPreview?: (cell: { r: number; c: number } | null) => void;
+  onPlantDrop?: (cell: { r: number; c: number } | null) => void;
   canvasWidth?: number;
   onTextureLoadProgressChange?: (progress: { loaded: number; total: number } | null) => void;
+  dragPreviewCell?: { r: number; c: number } | null;
+  dragPreviewValid?: boolean;
 };
 
 function seededRandom(seed: number) {
@@ -430,6 +434,30 @@ function findPlantAtCell(
   return null;
 }
 
+function resolvePlantAnchorAtCell(
+  cells: GardenState["cells"],
+  variantMap: Map<string, PlantVariant>,
+  targetRow: number,
+  targetCol: number
+) {
+  for (const cell of cells) {
+    if (!cell.plant || cell.plant === "empty") continue;
+    const meta = variantMap.get(cell.plant);
+    if (!meta) continue;
+    const fp = (meta.footprint ?? [1, 1]) as [number, number];
+    for (const occupiedCell of footprintCells({ r: cell.row, c: cell.col }, fp)) {
+      if (occupiedCell.r === targetRow && occupiedCell.c === targetCol) {
+        return {
+          anchor: { r: cell.row, c: cell.col },
+          meta,
+          footprint: fp,
+        };
+      }
+    }
+  }
+  return null;
+}
+
 function drawOccupiedCells(
   layer: PIXI.Container,
   cells: GardenState["cells"],
@@ -494,14 +522,20 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     symmetryHints = [],
     onCellSelect,
     onCanvasBackgroundClick,
+    onPlantDragPreview,
+    onPlantDrop,
     canvasWidth = 980,
     onTextureLoadProgressChange,
+    dragPreviewCell = null,
+    dragPreviewValid = false,
   }: FrontViewProps,
   ref
 ) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<PIXI.Application | null>(null);
   const sceneRef = useRef<PIXI.Container | null>(null);
+  const activeDragPointerIdRef = useRef<number | null>(null);
+  const isDraggingPlantRef = useRef(false);
   const [appReady, setAppReady] = useState(false);
   const [hoverPlant, setHoverPlant] = useState<HoverPlant | null>(null);
 
@@ -732,6 +766,18 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
 
       const c = Math.floor((x - baseX) / colGap);
       const r = Math.floor((y - baseY) / rowGap);
+      const selectedResolved = selectedCell ? resolvePlantAnchorAtCell(garden.cells, variantMap, selectedCell.r, selectedCell.c) : null;
+      if (
+        selectedResolved &&
+        footprintCells(selectedResolved.anchor, selectedResolved.footprint).some((cell) => cell.r === r && cell.c === c)
+      ) {
+        isDraggingPlantRef.current = true;
+        activeDragPointerIdRef.current = event.pointerId;
+        canvas.setPointerCapture?.(event.pointerId);
+        onPlantDragPreview?.({ r, c });
+        setHoverPlant(null);
+        return;
+      }
       onCellSelect?.({ r, c });
     };
 
@@ -744,6 +790,19 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
         x < baseX + garden.cols * colGap &&
         y >= baseY &&
         y < baseY + garden.rows * rowGap;
+
+      if (isDraggingPlantRef.current) {
+        if (!insideGrid) {
+          onPlantDragPreview?.(null);
+          setHoverPlant(null);
+          return;
+        }
+        const c = Math.floor((x - baseX) / colGap);
+        const r = Math.floor((y - baseY) / rowGap);
+        onPlantDragPreview?.({ r, c });
+        setHoverPlant(null);
+        return;
+      }
 
       if (!insideGrid) {
         setHoverPlant(null);
@@ -767,18 +826,63 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
     };
 
     const handlePointerLeave = () => {
+      if (!isDraggingPlantRef.current) {
+        setHoverPlant(null);
+      }
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (!isDraggingPlantRef.current) return;
+      if (activeDragPointerIdRef.current !== null && event.pointerId !== activeDragPointerIdRef.current) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const insideGrid =
+        x >= baseX &&
+        x < baseX + garden.cols * colGap &&
+        y >= baseY &&
+        y < baseY + garden.rows * rowGap;
+      const dropCell = insideGrid
+        ? {
+            r: Math.floor((y - baseY) / rowGap),
+            c: Math.floor((x - baseX) / colGap),
+          }
+        : null;
+      onPlantDrop?.(dropCell);
+      onPlantDragPreview?.(null);
+      isDraggingPlantRef.current = false;
+      activeDragPointerIdRef.current = null;
       setHoverPlant(null);
     };
 
     canvas.addEventListener("pointerdown", handlePointerDown);
     canvas.addEventListener("pointermove", handlePointerMove);
     canvas.addEventListener("pointerleave", handlePointerLeave);
+    canvas.addEventListener("pointerup", handlePointerUp);
+    canvas.addEventListener("pointercancel", handlePointerUp);
     return () => {
       canvas.removeEventListener("pointerdown", handlePointerDown);
       canvas.removeEventListener("pointermove", handlePointerMove);
       canvas.removeEventListener("pointerleave", handlePointerLeave);
+      canvas.removeEventListener("pointerup", handlePointerUp);
+      canvas.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [appReady, baseX, baseY, colGap, garden.cells, garden.cols, garden.rows, onCanvasBackgroundClick, onCellSelect, rowGap, variantMap]);
+  }, [
+    appReady,
+    baseX,
+    baseY,
+    colGap,
+    garden.cells,
+    garden.cols,
+    garden.rows,
+    onCanvasBackgroundClick,
+    onCellSelect,
+    onPlantDragPreview,
+    onPlantDrop,
+    rowGap,
+    selectedCell,
+    variantMap,
+  ]);
 
   useEffect(() => {
     const app = appRef.current;
@@ -841,6 +945,19 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
           .rect(baseX + selectedCell.c * colGap, baseY + selectedCell.r * rowGap, colGap, rowGap)
           .stroke({ color: 0xffffff, width: 3, alpha: 1 });
         debugGridLayer.addChild(selectedOutline);
+      }
+      if (showEditGrid && dragPreviewCell && selectedCell) {
+        const selectedResolved = resolvePlantAnchorAtCell(garden.cells, variantMap, selectedCell.r, selectedCell.c);
+        const previewFootprint = selectedResolved?.footprint ?? [1, 1];
+        const preview = new PIXI.Graphics();
+        for (const cell of footprintCells(dragPreviewCell, previewFootprint)) {
+          if (cell.r < 0 || cell.r >= garden.rows || cell.c < 0 || cell.c >= garden.cols) continue;
+          preview
+            .rect(baseX + cell.c * colGap, baseY + cell.r * rowGap, colGap, rowGap)
+            .fill({ color: dragPreviewValid ? 0x8fbe90 : 0xc77a72, alpha: 0.22 })
+            .stroke({ color: dragPreviewValid ? 0x5f9461 : 0x9f5f55, width: 2, alpha: 0.95 });
+        }
+        debugGridLayer.addChild(preview);
       }
 
       const cellsByPlantId = new Map<string, GardenState["cells"]>();
@@ -930,7 +1047,26 @@ export const FrontView = forwardRef<FrontViewHandle, FrontViewProps>(function Fr
       canceled = true;
       setRenderReady(false);
     };
-  }, [appReady, baseX, baseY, canvasH, canvasWidth, colGap, garden, gridH, gridW, monetMode, rowGap, selectedCell, showEditGrid, symmetryHints, textureMap, variantMap]);
+  }, [
+    appReady,
+    baseX,
+    baseY,
+    canvasH,
+    canvasWidth,
+    colGap,
+    dragPreviewCell,
+    dragPreviewValid,
+    garden,
+    gridH,
+    gridW,
+    monetMode,
+    rowGap,
+    selectedCell,
+    showEditGrid,
+    symmetryHints,
+    textureMap,
+    variantMap,
+  ]);
 
   return (
     <div ref={mountRef} style={{ width: "100%", maxWidth: canvasWidth, minHeight: canvasH, position: "relative" }}>
