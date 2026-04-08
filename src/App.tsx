@@ -29,6 +29,12 @@ function clampValue(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+function parseIntegerInput(value: string, min: number, max: number) {
+  const digitsOnly = value.replace(/\D+/g, "").slice(0, 2);
+  if (!digitsOnly) return min;
+  return clampValue(parseInt(digitsOnly, 10), min, max);
+}
+
 function DualSlider({
   min,
   max,
@@ -281,8 +287,8 @@ export default function App() {
   const [categories, setCategories] = useState<PlantCategory[]>([]);
   const [selectedCell, setSelectedCell] = useState<{ r: number; c: number } | null>(null);
   const [dragPreviewCell, setDragPreviewCell] = useState<{ r: number; c: number } | null>(null);
+  const [copiedPlantId, setCopiedPlantId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
-  const [catalogPaneWidth, setCatalogPaneWidth] = useState(320);
   const [designIntent, setDesignIntent] = useState<DesignIntent>(DEFAULT_DESIGN_INTENT);
   const [lastDensityBand, setLastDensityBand] = useState<"front" | "middle" | "back" | null>(null);
   const [colorPruneQueue, setColorPruneQueue] = useState<string[]>([]);
@@ -403,20 +409,6 @@ export default function App() {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!catalogPaneRef.current) return;
-
-    const updateWidth = () => {
-      const nextWidth = Math.max(240, Math.floor(catalogPaneRef.current?.clientWidth ?? 320));
-      setCatalogPaneWidth((prev) => (prev === nextWidth ? prev : nextWidth));
-    };
-
-    updateWidth();
-    const observer = new ResizeObserver(updateWidth);
-    observer.observe(catalogPaneRef.current);
-    return () => observer.disconnect();
-  }, []);
-
   const allVariants = useMemo(() => {
     const out: PlantVariant[] = [];
     for (const cat of categories) {
@@ -473,6 +465,8 @@ export default function App() {
   const editorGap = isCompactLayout ? 16 : 20;
   const compactViewportWidth = Math.max(320, viewportWidth - 32);
   const desktopSidebarWidth = 360;
+  const sidePanelWidth = isCompactLayout ? Math.max(260, compactViewportWidth - 8) : desktopSidebarWidth;
+  const sidePanelControlWidth = Math.max(120, sidePanelWidth - 56);
   const derivedFrontPaneWidth = isCompactLayout
     ? compactViewportWidth
     : Math.max(420, editorWidth - desktopSidebarWidth - editorGap);
@@ -1682,14 +1676,13 @@ export default function App() {
     );
   }
 
-  function canPlaceAtSelected(v: PlantVariant) {
-    if (!selectedCell) return false;
-    return canPlaceVariantAtCell(v, selectedCell);
-  }
-
-  function canPlaceVariantAtCell(v: PlantVariant, targetCell: { r: number; c: number }) {
+  function canPlaceVariantAtCellWithMode(
+    v: PlantVariant,
+    targetCell: { r: number; c: number },
+    options?: { ignoreSelectedPlant?: boolean }
+  ) {
     if (!plantSupportsZone(v, garden.zone)) return false;
-    const freed = selectedPlantFreedCells();
+    const freed = options?.ignoreSelectedPlant ? selectedPlantFreedCells() : new Set<string>();
     const fp = (v.footprint ?? [1, 1]) as [number, number];
 
     for (const cell of footprintCells(targetCell, fp)) {
@@ -1697,6 +1690,15 @@ export default function App() {
       if (occupancy[cell.r]?.[cell.c] && !freed.has(`${cell.r},${cell.c}`)) return false;
     }
     return true;
+  }
+
+  function canPlaceAtSelected(v: PlantVariant) {
+    if (!selectedCell) return false;
+    return canPlaceVariantAtCell(v, selectedCell);
+  }
+
+  function canPlaceVariantAtCell(v: PlantVariant, targetCell: { r: number; c: number }) {
+    return canPlaceVariantAtCellWithMode(v, targetCell, { ignoreSelectedPlant: true });
   }
 
   function disabledReason(v: PlantVariant) {
@@ -1772,7 +1774,10 @@ export default function App() {
     if (!resolved) return false;
     const variant = allVariants.find((item) => item.id === resolved.anchor.plant);
     if (!variant) return false;
-    return canPlaceVariantAtCell(variant, targetCell);
+    if (copiedPlantId) {
+      return canPlaceVariantAtCellWithMode(variant, targetCell, { ignoreSelectedPlant: false });
+    }
+    return canPlaceVariantAtCellWithMode(variant, targetCell, { ignoreSelectedPlant: true });
   }
 
   function moveSelectedPlantTo(targetCell: { r: number; c: number } | null) {
@@ -1796,6 +1801,25 @@ export default function App() {
     setGarden(next);
     setSelectedCell({ ...targetCell });
     setEditMode(true);
+  }
+
+  function placeCopiedPlantAt(targetCell: { r: number; c: number } | null) {
+    if (!targetCell || !copiedPlantId) return false;
+    const variant = allVariants.find((item) => item.id === copiedPlantId);
+    if (!variant) return false;
+    if (!canPlaceVariantAtCellWithMode(variant, targetCell, { ignoreSelectedPlant: false })) return false;
+
+    captureUndoSnapshot();
+    const next = structuredClone(garden);
+    const target = getCell(next, targetCell.r, targetCell.c);
+    if (!target) return false;
+    target.plant = copiedPlantId;
+    setGarden(next);
+    setSelectedCell({ ...targetCell });
+    setEditMode(true);
+    setCopiedPlantId(null);
+    setDragPreviewCell(null);
+    return true;
   }
 
   function applySize() {
@@ -2716,6 +2740,8 @@ export default function App() {
       const isRedo =
         ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "z") ||
         (event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === "y");
+      const isCopy = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "c";
+      const isEscape = event.key === "Escape";
 
       if (isRedo) {
         if (isEditable) return;
@@ -2732,6 +2758,25 @@ export default function App() {
         return;
       }
 
+      if (isCopy) {
+        if (isEditable) return;
+        if (!selectedPlantAnchor) return;
+        event.preventDefault();
+        setCopiedPlantId(selectedPlantAnchor.anchor.plant);
+        setDragPreviewCell({
+          r: selectedPlantAnchor.anchor.row,
+          c: selectedPlantAnchor.anchor.col,
+        });
+        return;
+      }
+
+      if (isEscape && copiedPlantId) {
+        event.preventDefault();
+        setCopiedPlantId(null);
+        setDragPreviewCell(null);
+        return;
+      }
+
       if (!selectedCell) return;
       if (event.key !== "Delete" && event.key !== "Backspace") return;
       if (isEditable) return;
@@ -2742,7 +2787,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [canRedo, canUndo, selectedCell, garden, allVariants]);
+  }, [canRedo, canUndo, copiedPlantId, selectedCell, garden, allVariants, selectedPlantAnchor]);
 
   useEffect(() => {
     if (skipAutoAdjustRef.current) return;
@@ -3187,11 +3232,6 @@ export default function App() {
                 flexWrap: "wrap",
               }}
             >
-              <div style={{ fontSize: 13, color: "#666" }}>
-                {frontViewMode === "edit"
-                  ? "点击左侧 front view 进入编辑，点击外部退出编辑。选中已有植物后，可直接拖动到新位置；也可按 Delete / Backspace，或点“删除植物”按钮。"
-                  : "效果预览是静态图，不可编辑；切回编辑模式后可继续摆放和删除植物。"}
-              </div>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <button
                   type="button"
@@ -3516,38 +3556,94 @@ export default function App() {
                     </>
                   ) : null}
                 </div>
-                  <label>
-                    Depth (ft):
-                    <input
-                      type="number"
-                      min={1}
-                      value={rowsInput}
-                      onChange={(e) => setRowsInput(Number(e.target.value))}
-                      style={{ width: 70, marginLeft: 6 }}
-                    />
-                  </label>
-                  <label>
-                    Width (ft):
-                    <input
-                      type="number"
-                      min={1}
-                      value={colsInput}
-                      onChange={(e) => setColsInput(Number(e.target.value))}
-                      style={{ width: 70, marginLeft: 6 }}
-                    />
-                  </label>
-                  <label>
-                    Zone:
-                    <input
-                      type="number"
-                      min={1}
-                      max={13}
-                      value={zoneInput}
-                      onChange={(e) => setZoneInput(Number(e.target.value))}
-                      style={{ width: 70, marginLeft: 6 }}
-                    />
-                  </label>
-                  <button onClick={applySize}>应用</button>
+                  <details
+                    style={{ position: "relative" }}
+                    onToggle={(event) => {
+                      const open = (event.currentTarget as HTMLDetailsElement).open;
+                      if (open) {
+                        setRowsInput(garden.rows);
+                        setColsInput(garden.cols);
+                        setZoneInput(garden.zone);
+                        return;
+                      }
+                      if (rowsInput !== garden.rows || colsInput !== garden.cols || zoneInput !== garden.zone) {
+                        applySize();
+                      }
+                    }}
+                  >
+                    <summary
+                      style={{
+                        listStyle: "none",
+                        padding: "6px 12px",
+                        borderRadius: 999,
+                        border: "1px solid #cdbdb3",
+                        background: "#f6f1e8",
+                        color: "#5e4c3c",
+                        whiteSpace: "nowrap",
+                        cursor: "pointer",
+                        userSelect: "none",
+                      }}
+                    >
+                      布局参数 ▾
+                    </summary>
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 8px)",
+                        right: 0,
+                        minWidth: 178,
+                        padding: 10,
+                        borderRadius: 12,
+                        border: "1px solid #ddd5c8",
+                        background: "#fffdf8",
+                        boxShadow: "0 10px 28px rgba(56, 47, 39, 0.12)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                        zIndex: 20,
+                      }}
+                    >
+                      <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                        <span>Depth (ft)</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={99}
+                          step={1}
+                          inputMode="numeric"
+                          value={rowsInput}
+                          onChange={(e) => setRowsInput(parseIntegerInput(e.target.value, 1, 99))}
+                          style={{ width: 36 }}
+                        />
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                        <span>Width (ft)</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={99}
+                          step={1}
+                          inputMode="numeric"
+                          value={colsInput}
+                          onChange={(e) => setColsInput(parseIntegerInput(e.target.value, 1, 99))}
+                          style={{ width: 36 }}
+                        />
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                        <span>Zone</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={13}
+                          step={1}
+                          inputMode="numeric"
+                          value={zoneInput}
+                          onChange={(e) => setZoneInput(parseIntegerInput(e.target.value, 1, 13))}
+                          style={{ width: 36 }}
+                        />
+                      </label>
+                    </div>
+                  </details>
                 </div>
               </div>
             </div>
@@ -3572,6 +3668,7 @@ export default function App() {
                     selectedCell={selectedCell}
                     dragPreviewCell={dragPreviewCell}
                     dragPreviewValid={canMoveSelectedPlantTo(dragPreviewCell)}
+                    copyPlacementMode={!!copiedPlantId}
                     symmetryHints={symmetryHints}
                     onCellSelect={(cell) => {
                       setDragPreviewCell(null);
@@ -3580,13 +3677,25 @@ export default function App() {
                     }}
                     onCanvasBackgroundClick={() => {
                       setDragPreviewCell(null);
+                      setCopiedPlantId(null);
                       setEditMode(false);
                       setSelectedCell(null);
                     }}
                     onPlantDragPreview={setDragPreviewCell}
-                    onPlantDrop={(cell) => {
-                      moveSelectedPlantTo(cell);
+                    onCopyPlacementCancel={() => {
+                      setCopiedPlantId(null);
                       setDragPreviewCell(null);
+                    }}
+                    onPlantDrop={(cell) => {
+                      if (copiedPlantId) {
+                        const placed = placeCopiedPlantAt(cell);
+                        if (!placed) {
+                          setDragPreviewCell(cell);
+                        }
+                      } else {
+                        moveSelectedPlantTo(cell);
+                        setDragPreviewCell(null);
+                      }
                     }}
                     onTextureLoadProgressChange={setFrontViewTextureLoadProgress}
                   />
@@ -3751,7 +3860,7 @@ export default function App() {
                     canSelectVariant={canPlaceAtSelected}
                     disabledReason={disabledReason}
                     onSelectVariant={(v) => choosePlant(v.id)}
-                    panelWidth={catalogPaneWidth}
+                    panelWidth={sidePanelWidth}
                   />
                 ) : (
                   <div
@@ -3801,66 +3910,236 @@ export default function App() {
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#2f3d2f" }}>
                     自动生成植物
                   </div>
-                  <button
-                    type="button"
-                    onClick={triggerImport}
-                    style={{
-                      flex: "0 0 auto",
-                      padding: "6px 10px",
-                      borderRadius: 999,
-                      border: "1px solid #d7d7d7",
-                      background: "#f6f3ed",
-                      color: "#6e665b",
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    导入布局
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={triggerImport}
+                      title="导入布局"
+                      aria-label="导入布局"
+                      style={{
+                        width: 32,
+                        height: 32,
+                        padding: 0,
+                        borderRadius: 999,
+                        border: "1px solid #d7d7d7",
+                        background: "#f6f3ed",
+                        color: "#6e665b",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 18,
+                        fontWeight: 500,
+                        lineHeight: 1,
+                      }}
+                    >
+                      +
+                    </button>
+                    <button
+                      onClick={confirmClearAllPlants}
+                      title="清空植物"
+                      aria-label="清空植物"
+                      style={{
+                        width: 32,
+                        height: 32,
+                        padding: 0,
+                        borderRadius: 999,
+                        border: "1px solid #d7c7bc",
+                        background: "#f7efe8",
+                        color: "#7a5a4b",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        flex: "0 0 auto",
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path
+                          d="M5.25 3.5h5.5"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinecap="round"
+                        />
+                        <path
+                          d="M6.2 2.7h3.6"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinecap="round"
+                        />
+                        <path
+                          d="M4.7 4.4h6.6l-.52 7.02a1 1 0 0 1-1 .92H6.2a1 1 0 0 1-1-.92L4.7 4.4Z"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M6.9 6.15v3.55M9.1 6.15v3.55"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <div
-                  style={{
-                    marginBottom: 14,
-                    padding: 12,
-                    borderRadius: 12,
-                    background: "#f5f8f2",
-                    border: "1px solid #d7e2d1",
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#2f3d2f", marginBottom: 8 }}>AI 设计建议</div>
-                  <textarea
-                    value={designIntentMessage}
-                    onChange={(event) => setDesignIntentMessage(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" || event.shiftKey) return;
-                      event.preventDefault();
-                      if (!designIntentMessage.trim() || isApplyingAiIntent) return;
-                      void applyAiDesignIntent();
-                    }}
-                    placeholder="例如：后排高一些，多一点白花，整体更对称。"
-                    rows={3}
-                    style={{
-                      width: "100%",
-                      resize: "vertical",
-                      borderRadius: 10,
-                      border: "1px solid #d7d7d7",
-                      padding: 10,
-                      fontSize: 13,
-                      fontFamily: "inherit",
-                      boxSizing: "border-box",
-                      marginBottom: 8,
-                    }}
-                  />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 12, color: "#6e665b", lineHeight: 1.5, flex: "1 1 180px", minWidth: 0 }}>
-                      AI 先修改设计参数，你再决定是否自动生成布局。
-                    </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ position: "relative", marginBottom: 8 }}>
+                    <textarea
+                      value={designIntentMessage}
+                      onChange={(event) => setDesignIntentMessage(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" || event.shiftKey) return;
+                        event.preventDefault();
+                        if (!designIntentMessage.trim() || isApplyingAiIntent) return;
+                        void applyAiDesignIntent();
+                      }}
+                      placeholder="例如：后排高一些，多一点白花，整体更对称。"
+                      rows={3}
+                      style={{
+                        width: "100%",
+                        resize: "vertical",
+                        borderRadius: 10,
+                        border: "1px solid #d7d7d7",
+                        padding: "10px 94px 48px 10px",
+                        fontSize: 13,
+                        fontFamily: "inherit",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                    <button
+                      onClick={autoGenerate}
+                      disabled={allVariants.length === 0 || isGeneratingLayout}
+                      title={
+                        isCatalogLoading
+                          ? "正在加载植物库..."
+                          : isGeneratingLayout
+                            ? "正在生成布局..."
+                            : "自动生成布局"
+                      }
+                      aria-label={
+                        isCatalogLoading
+                          ? "正在加载植物库..."
+                          : isGeneratingLayout
+                            ? "正在生成布局..."
+                            : "自动生成布局"
+                      }
+                      style={{
+                        position: "absolute",
+                        right: 52,
+                        bottom: 10,
+                        width: 34,
+                        height: 34,
+                        padding: 0,
+                        borderRadius: 999,
+                        border: "1px solid #cdbdb3",
+                        background:
+                          allVariants.length === 0 || isGeneratingLayout ? "#f2ede7" : "#f6f1e8",
+                        color:
+                          allVariants.length === 0 || isGeneratingLayout ? "#9b9185" : "#5e4c3c",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor:
+                          allVariants.length === 0 || isGeneratingLayout ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {isGeneratingLayout ? (
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeOpacity="0.22" strokeWidth="1.6" />
+                          <path
+                            d="M8 2.5a5.5 5.5 0 0 1 5.5 5.5"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                          >
+                            <animateTransform
+                              attributeName="transform"
+                              type="rotate"
+                              from="0 8 8"
+                              to="360 8 8"
+                              dur="0.9s"
+                              repeatCount="indefinite"
+                            />
+                          </path>
+                        </svg>
+                      ) : (
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                          <path
+                            d="M2 7.2c2.85 0 4.65-1.8 4.65-4.65 0 2.85 1.8 4.65 4.65 4.65-2.85 0-4.65 1.8-4.65 4.65C6.65 9 4.85 7.2 2 7.2Z"
+                            fill="currentColor"
+                          />
+                          <path
+                            d="M5.15 12.2c4.7 0 7.7-3 7.7-7.7 0 4.7 3 7.7 7.7 7.7-4.7 0-7.7 3-7.7 7.7 0-4.7-3-7.7-7.7-7.7Z"
+                            fill="currentColor"
+                          />
+                          <path
+                            d="M8.1 2.05c1.9 0 3.1-1.2 3.1-3.1 0 1.9 1.2 3.1 3.1 3.1-1.9 0-3.1 1.2-3.1 3.1 0-1.9-1.2-3.1-3.1-3.1Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      )}
+                    </button>
                     <button
                       onClick={applyAiDesignIntent}
                       disabled={!designIntentMessage.trim() || isApplyingAiIntent}
-                      style={{ flex: "0 0 auto", padding: "9px 12px", borderRadius: 10, whiteSpace: "nowrap" }}
+                      style={{
+                        position: "absolute",
+                        right: 10,
+                        bottom: 10,
+                        width: 34,
+                        height: 34,
+                        padding: 0,
+                        borderRadius: 999,
+                        border: "1px solid #cdbdb3",
+                        background:
+                          !designIntentMessage.trim() || isApplyingAiIntent ? "#f1ece4" : "#5e4c3c",
+                        color:
+                          !designIntentMessage.trim() || isApplyingAiIntent ? "#a09486" : "#fffdf8",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor:
+                          !designIntentMessage.trim() || isApplyingAiIntent ? "not-allowed" : "pointer",
+                      }}
+                      aria-label={isApplyingAiIntent ? "正在应用 AI 建议" : "应用 AI 建议"}
+                      title={isApplyingAiIntent ? "正在应用 AI 建议" : "应用 AI 建议"}
                     >
-                      {isApplyingAiIntent ? "应用中..." : "应用 AI 建议"}
+                      {isApplyingAiIntent ? (
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeOpacity="0.22" strokeWidth="1.6" />
+                          <path
+                            d="M8 2.5a5.5 5.5 0 0 1 5.5 5.5"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                          >
+                            <animateTransform
+                              attributeName="transform"
+                              type="rotate"
+                              from="0 8 8"
+                              to="360 8 8"
+                              dur="0.9s"
+                              repeatCount="indefinite"
+                            />
+                          </path>
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <path
+                            d="M8 12.5V3.5"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="m4.75 6.75 3.25-3.25 3.25 3.25"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
                     </button>
                   </div>
                   {designIntentSummary ? (
@@ -3898,33 +4177,6 @@ export default function App() {
                       </div>
                     </div>
                   ) : null}
-                </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-                  <button
-                    onClick={autoGenerate}
-                    disabled={allVariants.length === 0 || isGeneratingLayout}
-                    style={{ flex: "1 1 180px", padding: "10px 12px", borderRadius: 10 }}
-                  >
-                    {isCatalogLoading
-                      ? "正在加载植物库..."
-                      : isGeneratingLayout
-                        ? "正在生成布局..."
-                        : "自动生成布局"}
-                  </button>
-                  <button
-                    onClick={confirmClearAllPlants}
-                    style={{
-                      flex: "1 1 120px",
-                      padding: "10px 10px",
-                      borderRadius: 10,
-                      background: "#6a5a49",
-                      border: "1px solid #5b4d3f",
-                      color: "#fffdf8",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    清空
-                  </button>
                 </div>
                 <div
                   style={{
@@ -3981,7 +4233,7 @@ export default function App() {
                               height: { ...prev.height, backMin: value },
                             }))
                           }
-                          width={catalogPaneWidth - 56}
+                          width={sidePanelControlWidth}
                         />
                       </div>
                       <div style={{ marginBottom: 14 }}>
@@ -4007,7 +4259,7 @@ export default function App() {
                               height: { ...prev.height, backMax: Math.max(value, prev.height.backMin) },
                             }))
                           }
-                          width={catalogPaneWidth - 56}
+                          width={sidePanelControlWidth}
                         />
                       </div>
                       <div style={{ marginBottom: 14 }}>
@@ -4027,7 +4279,7 @@ export default function App() {
                               height: { ...prev.height, gradientStrength: Number(e.target.value) },
                             }))
                           }
-                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                          style={{ width: sidePanelControlWidth }}
                         />
                       </div>
                       <div style={{ marginBottom: 14 }}>
@@ -4047,7 +4299,7 @@ export default function App() {
                               layout: { ...prev.layout, symmetry: Number(e.target.value) },
                             }))
                           }
-                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                          style={{ width: sidePanelControlWidth }}
                         />
                       </div>
                       <div style={{ marginBottom: 14 }}>
@@ -4067,7 +4319,7 @@ export default function App() {
                               layout: { ...prev.layout, clusteriness: Number(e.target.value) },
                             }))
                           }
-                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                          style={{ width: sidePanelControlWidth }}
                         />
                       </div>
                       <div style={{ marginBottom: 14 }}>
@@ -4130,7 +4382,7 @@ export default function App() {
                               density: { ...prev.density, front: Number(e.target.value) },
                             }));
                           }}
-                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                          style={{ width: sidePanelControlWidth }}
                         />
                       </div>
                       <div style={{ marginBottom: 10 }}>
@@ -4151,7 +4403,7 @@ export default function App() {
                               density: { ...prev.density, middle: Number(e.target.value) },
                             }));
                           }}
-                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                          style={{ width: sidePanelControlWidth }}
                         />
                       </div>
                       <div style={{ marginBottom: 2 }}>
@@ -4172,45 +4424,12 @@ export default function App() {
                               density: { ...prev.density, back: Number(e.target.value) },
                             }));
                           }}
-                          style={{ width: Math.max(120, catalogPaneWidth - 56) }}
+                          style={{ width: sidePanelControlWidth }}
                         />
                       </div>
                     </div>
                   ) : null}
                 </div>
-                {selectedCell ? (
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: "#4f5f4f",
-                      background: "#f5f8f2",
-                      border: "1px solid #d7e2d1",
-                      borderRadius: 8,
-                      padding: "8px 10px",
-                    }}
-                  >
-                    当前选中行允许高度:{" "}
-                    {Math.round(
-                      minHeightForRow(
-                        selectedCell.r,
-                        garden.rows,
-                        designIntent.height.frontMin,
-                        designIntent.height.backMin
-                      )
-                    )}
-                    {" - "}
-                    {Math.round(
-                      maxHeightForRow(
-                        selectedCell.r,
-                        garden.rows,
-                        designIntent.height.frontMax,
-                        designIntent.height.backMax
-                      )
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 13, color: "#666" }}>请选择一个格子查看当前行的允许高度。</div>
-                )}
               </div>
             )}
           </div>
